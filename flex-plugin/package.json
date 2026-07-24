@@ -1,0 +1,36 @@
+{
+  "name": "plugin-conversation-memory",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Flex plugin that surfaces Twilio Memora (customer memory) traits, observations, and summaries inside the agent's CRM container.",
+  "scripts": {
+    "start": "NODE_OPTIONS=--max-old-space-size=8192 twilio flex:plugins:start",
+    "build": "NODE_OPTIONS=--max-old-space-size=8192 twilio flex:plugins:build",
+    "deploy": "NODE_OPTIONS=--max-old-space-size=8192 twilio flex:plugins:deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "test:watch": "jest --watch"
+  },
+  "dependencies": {
+    "@twilio-paste/core": "^15.0.0",
+    "react": "17.0.2",
+    "react-dom": "17.0.2"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^8.20.1",
+    "@testing-library/jest-dom": "^5.17.0",
+    "@testing-library/react": "^12.1.5",
+    "@twilio/flex-ui": "^2",
+    "@twilio/flex-plugin-scripts": "^7.1.0",
+    "@types/jest": "^29.5.12",
+    "@types/react": "17.0.2",
+    "@types/react-dom": "17.0.2",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "typescript": "^4.9.5"
+  },
+  "peerDependencies": {
+    "@twilio/flex-ui": "^2"
+  }
+}

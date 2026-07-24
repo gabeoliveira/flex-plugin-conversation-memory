@@ -1,0 +1,15 @@
+{
+  "name": "conversation-memory-serverless",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Twilio Functions for the Conversation Memory Flex plugin — proxies the Memora API so the credentials never leave the server.",
+  "scripts": {
+    "start": "twilio-run",
+    "deploy": "twilio-run deploy",
+    "test": "jest"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "twilio-run": "^4.0.1"
+  }
+}
