@@ -89,13 +89,31 @@ Notes:
 
 > Subsequent deploys must bump the version: `npm run deploy -- --patch|--minor|--major` (0.0.1 is taken).
 
-## Phase 5 — Unified Memory + Knowledge Search (prioritized next)
+## Phase 5 — Unified Memory + Knowledge Search (✅ built; token validation included)
 
-Turn the panel from a static viewer into a **search tool**. One search box queries
-the customer's memory *and* the org knowledge base in parallel and renders two
-clearly-labeled sections — "This customer" (personal) vs "Knowledge base" (org-wide).
-Both are the same Function-proxy pattern we already use; feasibility confirmed
-against the Twilio Customer Memory and Enterprise Knowledge skills.
+Turn the panel from a static viewer into a **search tool**. A 4th "Search" tab has one
+box that queries the customer's memory *and* the org knowledge base in parallel and
+renders two labeled sections — "This customer" (personal) vs "Knowledge base" (org-wide).
+The Flex **token validator** was wired into *all* Function endpoints in the same pass
+(they were open before). A **grounded "Summarize" action** was then added (see below).
+Tests: 55 total (32 serverless + 23 plugin), all green. Knowledge search uses the
+**v2** endpoint (`/v2/KnowledgeBases/{kb}/Search`); memory search returns the top-5
+matches (not all); every result shows `source` + a `% match` (Recall/Search `score`).
+
+**Grounded summarize (`summarize.js`, OpenAI):** a "Summarize results" button asks OpenAI
+to answer the query using ONLY the displayed results — the plugin passes them in (no
+re-retrieval), so citations `[M#]`/`[K#]` map to the numbered result cards. Grounded +
+cited prompt, short-circuits with no LLM call when there are no sources. Config:
+`OPENAI_API_KEY`, `OPENAI_MODEL` (default `gpt-4o-mini`). This is the retrieval→one-LLM-call
+path (no TAC, no Langflow) — see the Phase 6 note on why.
+
+Remaining to go live: fill `KNOWLEDGE_BASE_ID` (done) + `OPENAI_API_KEY` on the serverless
+service, redeploy serverless + plugin, tighten `ALLOWED_ORIGINS`.
+
+**Token flow:** the plugin reads `Flex.Manager.getInstance().user.token` and sends it as
+`Authorization: Bearer …`; each Function validates it with `twilio-flex-token-validator`
+(after the CORS `OPTIONS` preflight) and 401s anything unauthenticated. GET semantics kept;
+token never in a URL.
 
 **Two searches, different scope:**
 - **Memory (per-customer)** — needs the resolved profile. Recall already does hybrid
@@ -113,7 +131,7 @@ against the Twilio Customer Memory and Enterprise Knowledge skills.
   `{ query, top: ≤20, knowledgeIds?: [...] }` → returns ranked `chunks[]` (`{ content, … }`).
   Basic auth, same credentials. Config: `KNOWLEDGE_BASE_ID` (+ optional `KNOWLEDGE_IDS`),
   host `knowledge.twilio.com` (management/search host differs from memory's).
-- Both new/extended endpoints go **behind the Flex Token Validator** (see Phase 6 P1) —
+- Both new/extended endpoints go **behind the Flex Token Validator** (see Phase 7 P1) —
   they return PII / proprietary content.
 
 ### Plugin
@@ -134,7 +152,43 @@ against the Twilio Customer Memory and Enterprise Knowledge skills.
 - `KNOWLEDGE_BASE_ID` (KB exists with indexed content — confirmed). List KBs to grab the id:
   `GET https://memory.twilio.com/v1/ControlPlane/KnowledgeBases`.
 
-## Phase 6 — Hardening & Improvements (roadmap)
+## Phase 6 — Agent Productivity analytics (CO + CI + CIRL) — fast follow
+
+An **observability side-channel** on top of the assist: capture how agents use the
+assistant, run Conversation Intelligence on it, and report via CIRL. Distinct from the
+assist itself — it's a fire-and-forget side-write that never touches the agent UX or
+latency. The `summarize` turn already emits the shape this needs:
+`{ agentId, query, retrievedSources[], answer, timestamp }` — design once, use twice.
+
+**Why this is *not* TAC or Langflow:** TAC is a channel bridge (voice/WhatsApp/SMS + CO
+lifecycle); there is no channel here — a human agent queries a UI. So TAC is a mismatch,
+and a plain LLM call (Phase 5's `summarize`) is simpler than a Langflow flow. Langflow
+only earns its keep if this becomes an SE-editable or conversational assistant.
+
+**How the capture works (design):**
+- **Isolation is non-negotiable** — write to a **separate CO configuration + Memory Store**
+  dedicated to agents, with memory extraction pointed away from customer profiles.
+  Otherwise you poison customer profiles with "agent asked about X." Biggest risk.
+- **API-injected, not a native channel** — CO has no plug-in for new channel adapters;
+  push turns in via the Conversations API (`createConversation` + `POST /Communications`,
+  the `insertCommunication` pattern), tagged channel `API`/`SYSTEM`/`CHAT`. Set that
+  expectation — it's push-based injection, not capture rules.
+- **Inversion — the agent is the "customer":** model the human as `HUMAN_AGENT` and the
+  assistant as `AI_AGENT`, key the profile on **agent identity** → per-agent productivity
+  profiles ("what does this agent lean on the assistant for; who's adopted it").
+- **Custom CI operators** (GenAI): question topic, "answerable from memory/KB?",
+  knowledge-gap detection, assistant-helpfulness score. They run **async** on conversation
+  close/inactive → near-real-time, not instant.
+- **Closes the loop into CIRL** — operator results feed the Conversational Intelligence
+  Reporting Layer → a dashboard of AI-assist adoption + effectiveness per agent/team.
+- **Honest caveat:** CO+CI is heavier than logging to a table — justified only because you
+  want Twilio CI doing the analysis + the native dashboard story (the wow). For raw logs
+  alone, skip CO.
+
+Where it plugs in: `summarize.js` (and optionally the search endpoints) fire the CO
+side-write after responding to the agent.
+
+## Phase 7 — Hardening & Improvements (roadmap)
 
 ### P1 — Security (do before wider rollout; the proxy returns customer PII)
 

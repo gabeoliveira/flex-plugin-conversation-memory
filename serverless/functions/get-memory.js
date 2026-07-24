@@ -1,28 +1,25 @@
 /**
- * GET /get-memory?identifiers=<url-encoded JSON array>
- *
- * Example identifiers value (before encoding):
- *   [{"idType":"whatsapp","value":"whatsapp:+5511976932682"},
- *    {"idType":"phone","value":"+5511976932682"}]
+ * GET /get-memory?identifiers=<url-encoded JSON array>[&query=…][&profileId=…]
+ *   Authorization: Bearer <agent Flex token>   (required)
  *
  * Returns the Twilio Memora profile (traits), observations, and summaries for
- * the customer, used by the Conversation Memory Flex plugin to populate the
- * agent's CRM panel.
+ * a customer — used by the Conversation Memory Flex plugin's panel and search.
  *
- * The CLIENT decides which identifiers to try (it knows the task's channel and
- * has every identifier attribute). This proxy stays generic: it tries each
- * `{ idType, value }` candidate against Memora's Lookup in order, takes the
- * first profile that matches, then fetches the profile traits + Recall. Adding
- * a new identifier type (email, a custom id, …) is a client-only change.
+ * Modes:
+ *   - No `query`  → panel load: resolve profile, return traits + recent
+ *                   observations/summaries (chronological).
+ *   - With `query`→ semantic search: skip traits, run Recall with the query and
+ *                   return the most relevant observations/summaries.
+ *   - `profileId` → skip identifier Lookup and use the given profile directly
+ *                   (the panel already resolved it; search reuses it).
  *
- * Why a Function and not a direct Memora call from the plugin: the Memora API
- * key/secret are privileged. Keeping them server-side prevents them from
- * shipping in the Flex bundle, keeps customer memory (PII) out of task
- * attributes, and lets the agent always see the freshest data.
+ * The CLIENT decides which identifiers to try (it knows the task's channel).
+ * This proxy stays generic: it tries each `{ idType, value }` candidate against
+ * Memora's Lookup in order, first match wins, then getProfile + Recall.
  *
- * Auth: optional. The Twilio Function URL alone is the secret here. For
- * production, restrict ALLOWED_ORIGINS and add a shared header check — this
- * proxy returns customer memory.
+ * Auth: the agent's Flex token is validated server-side (twilio-flex-token-
+ * validator) before any Memora call — the function is not open. The Memora API
+ * key/secret stay server-side so they never ship in the Flex bundle.
  */
 
 exports.handler = async function (context, event, callback) {
@@ -34,13 +31,11 @@ exports.handler = async function (context, event, callback) {
     return callback(null, response);
   }
 
-  // --- Parse the ordered identifier candidates -------------------------------
-  const identifiers = parseIdentifiers(event.identifiers);
-  if (identifiers.length === 0) {
-    response.setStatusCode(400);
-    response.setBody({
-      error: "missing or invalid 'identifiers' query parameter (JSON array of {idType, value})",
-    });
+  // --- Authenticate the agent (Flex token) ---------------------------------
+  const auth = await validateFlexToken(context, event);
+  if (!auth.valid) {
+    response.setStatusCode(401);
+    response.setBody({ error: 'missing or invalid Flex token' });
     return callback(null, response);
   }
 
@@ -65,89 +60,145 @@ exports.handler = async function (context, event, callback) {
   const authHeader = 'Basic ' + Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
   const storeBase = `${baseUrl}/v1/Stores/${encodeURIComponent(storeId)}`;
 
-  try {
-    // --- Resolve a profile by trying each candidate in order -----------------
-    let profileId = null;
-    let matchedBy = null;
-    let matchedIdentifier = identifiers[0].value;
+  const query = typeof event.query === 'string' && event.query.trim() ? event.query.trim() : null;
+  const givenProfileId =
+    typeof event.profileId === 'string' && event.profileId.trim() ? event.profileId.trim() : null;
 
-    for (const { idType, value } of identifiers) {
-      const result = await lookupProfile(storeBase, authHeader, idType, value);
-      if (result.profiles && result.profiles.length > 0) {
-        profileId = result.profiles[0];
-        matchedBy = idType;
-        matchedIdentifier = value;
-        break;
+  try {
+    // --- Resolve a profile ---------------------------------------------------
+    let profileId = givenProfileId;
+    let matchedBy = null;
+    let matchedIdentifier = '';
+
+    if (!profileId) {
+      const identifiers = parseIdentifiers(event.identifiers);
+      if (identifiers.length === 0) {
+        response.setStatusCode(400);
+        response.setBody({
+          error: "missing 'profileId' or valid 'identifiers' (JSON array of {idType, value})",
+        });
+        return callback(null, response);
+      }
+      matchedIdentifier = identifiers[0].value;
+      for (const { idType, value } of identifiers) {
+        const result = await lookupProfile(storeBase, authHeader, idType, value);
+        if (result.profiles && result.profiles.length > 0) {
+          profileId = result.profiles[0];
+          matchedBy = idType;
+          matchedIdentifier = value;
+          break;
+        }
       }
     }
 
     if (!profileId) {
-      // No candidate matched — return a clean empty payload so the UI shows
-      // empty states rather than an error.
+      // No candidate matched — clean empty payload so the UI shows empty states.
       response.setStatusCode(200);
-      response.setBody({
-        identifier: matchedIdentifier,
-        matchedBy: null,
-        profileId: null,
-        profileCreatedAt: null,
-        traits: {},
-        observations: [],
-        summaries: [],
-      });
+      response.setBody(emptyPayload(matchedIdentifier));
       return callback(null, response);
     }
 
-    // --- Fetch profile traits + recall memories in parallel -----------------
-    const traitQuery = traitGroups.length ? `?traitGroups=${traitGroups.join(',')}` : '';
-    const [profileResult, recallResult] = await Promise.allSettled([
-      getJson(`${storeBase}/Profiles/${profileId}${traitQuery}`, {
+    // --- Recall (always) + profile traits (panel load only) -----------------
+    // Search mode returns only the top-ranked matches (Recall reorders by
+    // relevance but still returns up to the limit — a high limit = "everything").
+    // NOTE: Recall honors ONLY camelCase limit params; snake_case is silently
+    // ignored and it returns its (large) default set.
+    const recallBody = {
+      observationsLimit: query ? 5 : 10,
+      summariesLimit: query ? 3 : 5,
+    };
+    if (query) recallBody.query = query;
+
+    const recall = await getJson(`${storeBase}/Profiles/${profileId}/Recall`, {
+      method: 'POST',
+      headers: { Authorization: authHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify(recallBody),
+    }).catch((err) => ({ __error: err }));
+
+    // Traits are only needed for the panel (non-search) view.
+    let traits = {};
+    let profileCreatedAt = null;
+    let profileError = null;
+    if (!query) {
+      const traitQuery = traitGroups.length ? `?traitGroups=${traitGroups.join(',')}` : '';
+      const profile = await getJson(`${storeBase}/Profiles/${profileId}${traitQuery}`, {
         method: 'GET',
         headers: { Authorization: authHeader },
-      }),
-      getJson(`${storeBase}/Profiles/${profileId}/Recall`, {
-        method: 'POST',
-        headers: { Authorization: authHeader, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ observation_limit: 10, summary_limit: 5, session_limit: 3 }),
-      }),
-    ]);
-
-    const profileOk = profileResult.status === 'fulfilled';
-    const recallOk = recallResult.status === 'fulfilled';
-
-    if (!profileOk && !recallOk) {
-      response.setStatusCode(502);
-      response.setBody({
-        error: 'memora fetch failed',
-        detail: String(
-          (profileResult.reason && profileResult.reason.message) || profileResult.reason,
-        ),
-      });
-      return callback(null, response);
+      }).catch((err) => ({ __error: err }));
+      if (profile && profile.__error) {
+        profileError = profile.__error;
+      } else if (profile) {
+        traits = normalizeTraits(profile.traits);
+        profileCreatedAt = profile.createdAt || null;
+      }
     }
 
-    const profile = profileOk ? profileResult.value : {};
-    const recall = recallOk ? recallResult.value : {};
+    const recallFailed = recall && recall.__error;
+
+    // Search mode: Recall is the whole result — its failure is fatal.
+    if (query && recallFailed) {
+      response.setStatusCode(502);
+      response.setBody({ error: 'memora recall failed', detail: errString(recall.__error) });
+      return callback(null, response);
+    }
+    // Panel mode: fatal only if BOTH traits and recall failed.
+    if (!query && recallFailed && profileError) {
+      response.setStatusCode(502);
+      response.setBody({ error: 'memora fetch failed', detail: errString(profileError) });
+      return callback(null, response);
+    }
 
     response.setStatusCode(200);
     response.setBody({
       identifier: matchedIdentifier,
       matchedBy,
       profileId,
-      profileCreatedAt: profile.createdAt || null,
-      traits: normalizeTraits(profile.traits),
-      observations: Array.isArray(recall.observations) ? recall.observations : [],
-      summaries: Array.isArray(recall.summaries) ? recall.summaries : [],
-      partial: !profileOk || !recallOk,
+      profileCreatedAt,
+      traits,
+      observations: !recallFailed && Array.isArray(recall.observations) ? recall.observations : [],
+      summaries: !recallFailed && Array.isArray(recall.summaries) ? recall.summaries : [],
+      partial: Boolean(recallFailed || profileError),
     });
     return callback(null, response);
   } catch (err) {
     response.setStatusCode(502);
-    response.setBody({ error: 'memora fetch failed', detail: String((err && err.message) || err) });
+    response.setBody({ error: 'memora fetch failed', detail: errString(err) });
     return callback(null, response);
   }
 };
 
 // --- helpers ----------------------------------------------------------------
+
+function emptyPayload(identifier) {
+  return {
+    identifier: identifier || '',
+    matchedBy: null,
+    profileId: null,
+    profileCreatedAt: null,
+    traits: {},
+    observations: [],
+    summaries: [],
+  };
+}
+
+/** Validate the agent's Flex token (from an Authorization: Bearer header, or event.Token). */
+async function validateFlexToken(context, event) {
+  const token = bearerToken(event) || event.Token || null;
+  if (!token) return { valid: false };
+  try {
+    const { validator } = require('twilio-flex-token-validator');
+    await validator(token, context.ACCOUNT_SID, context.AUTH_TOKEN);
+    return { valid: true };
+  } catch (err) {
+    return { valid: false, error: err };
+  }
+}
+
+function bearerToken(event) {
+  const headers = (event.request && event.request.headers) || {};
+  const raw = headers.authorization || headers.Authorization || '';
+  return raw.startsWith('Bearer ') ? raw.slice(7).trim() : null;
+}
 
 /** Parse + validate the identifiers param into a clean [{idType, value}] list. */
 function parseIdentifiers(raw) {
@@ -189,6 +240,10 @@ async function getJson(url, options) {
     throw err;
   }
   return res.json();
+}
+
+function errString(err) {
+  return String((err && err.message) || err);
 }
 
 /**

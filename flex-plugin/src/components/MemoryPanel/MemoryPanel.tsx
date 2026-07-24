@@ -7,6 +7,7 @@ import { Text } from '@twilio-paste/core/text';
 import { Button } from '@twilio-paste/core/button';
 
 import { buildIdentifierCandidates, describeIdentifier } from '../../utils/identifiers';
+import { getFlexToken } from '../../utils/flexToken';
 import { fetchMemory, type MemoryResponse } from '../../api/fetchMemory';
 import { MemoryTabs } from './MemoryTabs';
 import { LoadingState, EmptyState, ErrorState } from './states';
@@ -24,6 +25,7 @@ type PanelState =
 function MemoryPanelImpl({ task }: Props) {
   const candidates = buildIdentifierCandidates(task?.attributes);
   const displayId = describeIdentifier(candidates);
+  const token = getFlexToken();
   // Stable dependency for the effect — candidates is rebuilt each render.
   const candidatesKey = JSON.stringify(candidates);
 
@@ -37,7 +39,7 @@ function MemoryPanelImpl({ task }: Props) {
     }
     const controller = new AbortController();
     setState({ kind: 'loading' });
-    fetchMemory({ identifiers: candidates }, controller.signal)
+    fetchMemory({ identifiers: candidates, token }, controller.signal)
       .then((data) => setState({ kind: 'ok', data }))
       .catch((err) => {
         if (controller.signal.aborted) return;
@@ -84,7 +86,7 @@ function MemoryPanelImpl({ task }: Props) {
       ) : state.kind === 'error' ? (
         <ErrorState identifier={displayId} message={state.message} />
       ) : (
-        <MemoryTabs data={state.data} />
+        <MemoryTabs data={state.data} identifiers={candidates} token={token} />
       )}
     </Box>
   );

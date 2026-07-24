@@ -8,6 +8,9 @@
     "deploy": "twilio-run deploy",
     "test": "jest"
   },
+  "dependencies": {
+    "twilio-flex-token-validator": "^1.1.9"
+  },
   "devDependencies": {
     "jest": "^29.7.0",
     "twilio-run": "^4.0.1"

@@ -7,11 +7,15 @@ import { Tabs, TabList, Tab, TabPanels, TabPanel, useTabState } from '@twilio-pa
 import { TraitsTab } from './TraitsTab';
 import { ObservationsTab } from './ObservationsTab';
 import { SummariesTab } from './SummariesTab';
+import { SearchTab } from './SearchTab';
 import { PartialBanner } from './states';
 import type { MemoryResponse } from '../../api/fetchMemory';
+import type { IdentifierCandidate } from '../../utils/identifiers';
 
 interface Props {
   data: MemoryResponse;
+  identifiers: IdentifierCandidate[];
+  token: string;
 }
 
 /** Small count chip rendered inside each tab label. */
@@ -25,7 +29,7 @@ function TabCount({ count }: { count: number }) {
   );
 }
 
-export function MemoryTabs({ data }: Props) {
+export function MemoryTabs({ data, identifiers, token }: Props) {
   const tabState = useTabState({ baseId: 'memory-tabs', selectedId: 'traits' });
 
   const traitGroupCount = Object.keys(data.traits || {}).length;
@@ -49,6 +53,7 @@ export function MemoryTabs({ data }: Props) {
             Summaries
             <TabCount count={summaryCount} />
           </Tab>
+          <Tab id="search">Search</Tab>
         </TabList>
         <TabPanels>
           <TabPanel>
@@ -59,6 +64,9 @@ export function MemoryTabs({ data }: Props) {
           </TabPanel>
           <TabPanel>
             <SummariesTab summaries={data.summaries} />
+          </TabPanel>
+          <TabPanel>
+            <SearchTab identifiers={identifiers} profileId={data.profileId} token={token} />
           </TabPanel>
         </TabPanels>
       </Tabs>

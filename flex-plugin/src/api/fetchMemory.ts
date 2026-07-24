@@ -17,13 +17,19 @@ export interface MemoryObservation {
   occurredAt?: string;
   conversationIds?: string[] | null;
   source?: string;
+  /** Semantic relevance score (0–1) — only meaningful on a search query. */
+  score?: number;
 }
 
 export interface MemorySummary {
   id: string;
   content: string;
   createdAt: string;
+  occurredAt?: string;
   conversationIds?: string[];
+  source?: string;
+  /** Semantic relevance score (0–1) — only meaningful on a search query. */
+  score?: number;
 }
 
 export interface MemoryResponse {
@@ -44,7 +50,13 @@ export interface MemoryResponse {
 
 export interface FetchMemoryParams {
   /** Ordered identifier candidates to resolve the profile (first match wins). */
-  identifiers: IdentifierCandidate[];
+  identifiers?: IdentifierCandidate[];
+  /** Resolved profile id — skips the identifier Lookup step when provided. */
+  profileId?: string | null;
+  /** Semantic search query; omit for the chronological panel view. */
+  query?: string;
+  /** Agent Flex token, sent as Authorization: Bearer for server-side validation. */
+  token: string;
 }
 
 const BASE = (process.env.FLEX_APP_FUNCTIONS_BASE_URL || '').replace(/\/$/, '');
@@ -61,9 +73,15 @@ export async function fetchMemory(
   const endpoint = BASE.endsWith('/get-memory') ? BASE : `${BASE}/get-memory`;
 
   // GET keeps read semantics; the ordered candidate list rides as one JSON param.
-  const query = new URLSearchParams({ identifiers: JSON.stringify(params.identifiers) });
+  const query = new URLSearchParams();
+  if (params.identifiers) query.set('identifiers', JSON.stringify(params.identifiers));
+  if (params.profileId) query.set('profileId', params.profileId);
+  if (params.query) query.set('query', params.query);
 
-  const res = await fetch(`${endpoint}?${query.toString()}`, { signal });
+  const res = await fetch(`${endpoint}?${query.toString()}`, {
+    signal,
+    headers: { Authorization: `Bearer ${params.token}` },
+  });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     throw new Error(`get-memory ${res.status}: ${body || res.statusText}`);
