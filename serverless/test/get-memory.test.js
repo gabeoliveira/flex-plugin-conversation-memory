@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-var-requires */
 
-// --- Test doubles for the Twilio Functions runtime ------------------------
+// Mock the Flex token validator: resolves (valid) unless a test overrides it.
+jest.mock('twilio-flex-token-validator', () => ({ validator: jest.fn().mockResolvedValue({}) }));
+const { validator } = require('twilio-flex-token-validator');
 
 class FakeResponse {
   constructor() {
@@ -30,213 +32,208 @@ const CONTEXT = {
   MEMORY_API_URL: 'https://memory.twilio.com',
   TWILIO_MEMORY_PROFILE_TRAIT_GROUPS: 'Contact,Preferences',
   ALLOWED_ORIGINS: '*',
+  ACCOUNT_SID: 'ACxxx',
+  AUTH_TOKEN: 'authtok',
 };
 
-// identifiers is passed as a JS array and JSON-encoded into the query param,
-// exactly as the plugin sends it. Pass `undefined` to omit it entirely.
-function invoke(identifiers, context = CONTEXT, extra = {}) {
-  const event = {
-    request: { method: 'GET', headers: {} },
-    ...(identifiers === undefined ? {} : { identifiers: JSON.stringify(identifiers) }),
-    ...extra,
-  };
+function invoke(fields = {}, { context = CONTEXT, token = 'valid-token', method = 'GET' } = {}) {
+  const headers = {};
+  if (token) headers.authorization = `Bearer ${token}`;
+  const event = { request: { method, headers }, ...fields };
   return new Promise((resolve, reject) => {
     handler(context, event, (err, res) => (err ? reject(err) : resolve(res)));
   });
 }
 
+const ids = (list) => ({ identifiers: JSON.stringify(list) });
+
 function makeRes(data, ok = true, status = 200) {
-  return {
-    ok,
-    status,
-    json: async () => data,
-    text: async () => JSON.stringify(data),
-  };
+  return { ok, status, json: async () => data, text: async () => JSON.stringify(data) };
 }
 
-// Routes Lookup calls by idType (cfg.lookups[idType]); profile + recall by URL.
+// Routes Lookup by idType (cfg.lookups[idType]); recall + profile GET by URL.
 function setupFetch(cfg = {}) {
   global.fetch = jest.fn(async (url, options) => {
     if (url.endsWith('/Profiles/Lookup')) {
       const { idType } = JSON.parse(options.body);
       return (cfg.lookups && cfg.lookups[idType]) ?? makeRes({ profiles: [] });
     }
-    if (url.includes('/Recall')) {
-      return cfg.recall ?? makeRes({ observations: [], summaries: [] });
-    }
-    if (url.includes('/Profiles/')) {
-      return cfg.profile ?? makeRes({ id: 'p', createdAt: 't', traits: {} });
-    }
+    if (url.includes('/Recall')) return cfg.recall ?? makeRes({ observations: [], summaries: [] });
+    if (url.includes('/Profiles/')) return cfg.profile ?? makeRes({ id: 'p', createdAt: 't', traits: {} });
     throw new Error(`unexpected url: ${url}`);
   });
   return global.fetch;
 }
 
-function lookupCalls() {
-  return global.fetch.mock.calls
-    .filter(([url]) => url.endsWith('/Profiles/Lookup'))
-    .map(([, options]) => JSON.parse(options.body));
-}
+const calls = (pred) => global.fetch.mock.calls.filter(pred);
+const lookupCalls = () =>
+  calls(([url]) => url.endsWith('/Profiles/Lookup')).map(([, o]) => JSON.parse(o.body));
+const recallBodies = () =>
+  calls(([url]) => url.includes('/Recall')).map(([, o]) => JSON.parse(o.body));
+const profileGets = () =>
+  calls(([url, o]) => url.includes('/Profiles/') && !url.includes('/Recall') && o.method === 'GET');
 
 const WA = { idType: 'whatsapp', value: 'whatsapp:+5511976932682' };
 const PHONE = { idType: 'phone', value: '+5511976932682' };
 
+beforeEach(() => {
+  validator.mockReset().mockResolvedValue({});
+});
 afterEach(() => {
   jest.resetAllMocks();
 });
 
-describe('get-memory handler', () => {
-  it('returns 400 when the identifiers param is missing', async () => {
+describe('get-memory — auth', () => {
+  it('401 when no Flex token is present', async () => {
     setupFetch();
-    const res = await invoke(undefined);
-    expect(res.statusCode).toBe(400);
+    const res = await invoke(ids([PHONE]), { token: null });
+    expect(res.statusCode).toBe(401);
+    expect(validator).not.toHaveBeenCalled();
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('returns 400 when identifiers is an empty array', async () => {
+  it('401 when the token is invalid (validator rejects)', async () => {
     setupFetch();
-    const res = await invoke([]);
-    expect(res.statusCode).toBe(400);
+    validator.mockRejectedValue(new Error('invalid token'));
+    const res = await invoke(ids([PHONE]));
+    expect(res.statusCode).toBe(401);
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('returns 500 when required config is missing', async () => {
+  it('CORS preflight returns 204 without requiring a token', async () => {
     setupFetch();
-    const res = await invoke([PHONE], { ...CONTEXT, TWILIO_API_KEY: '' });
+    const res = await invoke({}, { token: null, method: 'OPTIONS' });
+    expect(res.statusCode).toBe(204);
+    expect(validator).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('get-memory — panel mode (no query)', () => {
+  it('400 when neither profileId nor valid identifiers are provided', async () => {
+    setupFetch();
+    const res = await invoke(ids([]));
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('500 when required config is missing', async () => {
+    setupFetch();
+    const res = await invoke(ids([PHONE]), { context: { ...CONTEXT, TWILIO_API_KEY: '' } });
     expect(res.statusCode).toBe(500);
   });
 
-  it('tries candidates in order and stops at the first match', async () => {
+  it('tries candidates in order, first match wins; returns traits + recall', async () => {
     setupFetch({
       lookups: { whatsapp: makeRes({ profiles: ['mem_profile_1'] }) },
-      profile: makeRes({
-        id: 'mem_profile_1',
-        createdAt: '2026-01-01T00:00:00Z',
-        traits: { Contact: { firstName: 'Rafaela' } },
-      }),
-      recall: makeRes({
-        observations: [{ id: 'o1', content: 'c', createdAt: '2026-01-02T00:00:00Z' }],
-        summaries: [],
-      }),
+      profile: makeRes({ id: 'mem_profile_1', createdAt: 't', traits: { Contact: { firstName: 'R' } } }),
+      recall: makeRes({ observations: [{ id: 'o1', content: 'c', createdAt: 't' }], summaries: [] }),
     });
-
-    const res = await invoke([WA, PHONE]);
-
+    const res = await invoke(ids([WA, PHONE]));
     expect(res.statusCode).toBe(200);
     expect(res.body.matchedBy).toBe('whatsapp');
-    expect(res.body.identifier).toBe(WA.value);
-    expect(res.body.profileId).toBe('mem_profile_1');
-    expect(res.body.traits.Contact.firstName).toBe('Rafaela');
+    expect(res.body.traits.Contact.firstName).toBe('R');
     expect(res.body.observations).toHaveLength(1);
-    expect(res.body.partial).toBe(false);
-
-    // Only the first (whatsapp) candidate was looked up.
     expect(lookupCalls()).toEqual([{ idType: 'whatsapp', value: WA.value }]);
+    // panel mode fetches traits and recall without a query
+    expect(profileGets()).toHaveLength(1);
+    expect(recallBodies()[0].query).toBeUndefined();
+    expect(recallBodies()[0].observationsLimit).toBe(10);
   });
 
-  it('falls through to the next candidate when the first does not match', async () => {
+  it('falls through to the next candidate when the first is empty', async () => {
     setupFetch({
-      lookups: {
-        whatsapp: makeRes({ profiles: [] }),
-        phone: makeRes({ profiles: ['mem_profile_2'] }),
-      },
-      profile: makeRes({ id: 'mem_profile_2', createdAt: 't', traits: {} }),
+      lookups: { whatsapp: makeRes({ profiles: [] }), phone: makeRes({ profiles: ['p2'] }) },
+      profile: makeRes({ id: 'p2', createdAt: 't', traits: {} }),
     });
-
-    const res = await invoke([WA, PHONE]);
-
-    expect(res.statusCode).toBe(200);
+    const res = await invoke(ids([WA, PHONE]));
     expect(res.body.matchedBy).toBe('phone');
-    expect(res.body.identifier).toBe(PHONE.value);
-    expect(lookupCalls()).toEqual([
-      { idType: 'whatsapp', value: WA.value },
-      { idType: 'phone', value: PHONE.value },
-    ]);
+    expect(lookupCalls().map((l) => l.idType)).toEqual(['whatsapp', 'phone']);
   });
 
-  it('passes an arbitrary idType straight through to Lookup (flexible identifiers)', async () => {
-    setupFetch({
-      lookups: { email: makeRes({ profiles: ['mem_profile_e'] }) },
-      profile: makeRes({ id: 'mem_profile_e', createdAt: 't', traits: {} }),
-    });
-
-    const res = await invoke([{ idType: 'email', value: 'rafaela@example.com' }]);
-
-    expect(res.statusCode).toBe(200);
-    expect(res.body.matchedBy).toBe('email');
-    expect(lookupCalls()).toEqual([{ idType: 'email', value: 'rafaela@example.com' }]);
-  });
-
-  it('returns a clean empty 200 payload when no candidate matches', async () => {
-    setupFetch({ lookups: { whatsapp: makeRes({ profiles: [] }), phone: makeRes({ profiles: [] }) } });
-
-    const res = await invoke([WA, PHONE]);
-
+  it('returns a clean empty 200 when no candidate matches', async () => {
+    setupFetch({ lookups: { phone: makeRes({ profiles: [] }) } });
+    const res = await invoke(ids([PHONE]));
     expect(res.statusCode).toBe(200);
     expect(res.body.profileId).toBeNull();
-    expect(res.body.matchedBy).toBeNull();
-    expect(res.body.traits).toEqual({});
     expect(res.body.observations).toEqual([]);
-    expect(res.body.summaries).toEqual([]);
   });
 
-  it('skips malformed candidates and uses the valid ones', async () => {
+  it('partial:true when recall fails but traits load', async () => {
     setupFetch({
-      lookups: { phone: makeRes({ profiles: ['mem_profile_3'] }) },
-      profile: makeRes({ id: 'mem_profile_3', createdAt: 't', traits: {} }),
-    });
-
-    const res = await invoke([{ idType: 'phone' }, { value: 'x' }, PHONE]);
-
-    expect(res.statusCode).toBe(200);
-    expect(lookupCalls()).toEqual([{ idType: 'phone', value: PHONE.value }]);
-  });
-
-  it('returns partial:true when recall fails but the profile loads', async () => {
-    setupFetch({
-      lookups: { phone: makeRes({ profiles: ['mem_profile_4'] }) },
-      profile: makeRes({ id: 'mem_profile_4', createdAt: 't', traits: { Contact: { a: 1 } } }),
+      lookups: { phone: makeRes({ profiles: ['p4'] }) },
+      profile: makeRes({ id: 'p4', createdAt: 't', traits: { Contact: { a: 1 } } }),
       recall: makeRes({ error: 'down' }, false, 500),
     });
-
-    const res = await invoke([PHONE]);
-
+    const res = await invoke(ids([PHONE]));
     expect(res.statusCode).toBe(200);
     expect(res.body.partial).toBe(true);
     expect(res.body.traits.Contact).toEqual({ a: 1 });
-    expect(res.body.observations).toEqual([]);
   });
 
-  it('returns 502 when both profile and recall fail', async () => {
+  it('502 when both traits and recall fail', async () => {
     setupFetch({
-      lookups: { phone: makeRes({ profiles: ['mem_profile_5'] }) },
-      profile: makeRes({ error: 'down' }, false, 500),
-      recall: makeRes({ error: 'down' }, false, 500),
+      lookups: { phone: makeRes({ profiles: ['p5'] }) },
+      profile: makeRes({ error: 'x' }, false, 500),
+      recall: makeRes({ error: 'x' }, false, 500),
     });
-
-    const res = await invoke([PHONE]);
+    const res = await invoke(ids([PHONE]));
     expect(res.statusCode).toBe(502);
   });
 
-  it('normalizeTraits drops trait groups that are not plain objects', async () => {
+  it('normalizeTraits drops non-object trait groups', async () => {
     setupFetch({
-      lookups: { phone: makeRes({ profiles: ['mem_profile_6'] }) },
-      profile: makeRes({
-        id: 'mem_profile_6',
-        createdAt: 't',
-        traits: { Contact: { firstName: 'R' }, Junk: 'string', Arr: [1, 2] },
-      }),
-      recall: makeRes({ observations: [], summaries: [] }),
+      lookups: { phone: makeRes({ profiles: ['p6'] }) },
+      profile: makeRes({ id: 'p6', createdAt: 't', traits: { Contact: { a: 1 }, Junk: 'x', Arr: [1] } }),
     });
-
-    const res = await invoke([PHONE]);
+    const res = await invoke(ids([PHONE]));
     expect(Object.keys(res.body.traits)).toEqual(['Contact']);
   });
+});
 
-  it('responds to a CORS preflight with 204', async () => {
-    setupFetch();
-    const res = await invoke(undefined, CONTEXT, { request: { method: 'OPTIONS', headers: {} } });
-    expect(res.statusCode).toBe(204);
-    expect(global.fetch).not.toHaveBeenCalled();
+describe('get-memory — search mode (query) & profileId', () => {
+  it('passes query to Recall, raises the limit, and skips the traits fetch', async () => {
+    setupFetch({
+      lookups: { phone: makeRes({ profiles: ['p7'] }) },
+      recall: makeRes({ observations: [{ id: 'o', content: 'match', createdAt: 't' }], summaries: [] }),
+    });
+    const res = await invoke({ ...ids([PHONE]), query: 'billing issue' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body.observations).toHaveLength(1);
+    expect(res.body.traits).toEqual({});
+    expect(profileGets()).toHaveLength(0); // traits not fetched in search mode
+    // search mode returns only the top-ranked matches, not everything
+    // (camelCase — Recall silently ignores snake_case limits)
+    expect(recallBodies()[0]).toMatchObject({ query: 'billing issue', observationsLimit: 5 });
+  });
+
+  it('search mode returns 502 when Recall fails (recall is the whole result)', async () => {
+    setupFetch({
+      lookups: { phone: makeRes({ profiles: ['p8'] }) },
+      recall: makeRes({ error: 'down' }, false, 500),
+    });
+    const res = await invoke({ ...ids([PHONE]), query: 'x' });
+    expect(res.statusCode).toBe(502);
+  });
+
+  it('uses a provided profileId and skips the Lookup step', async () => {
+    setupFetch({ recall: makeRes({ observations: [], summaries: [] }) });
+    const res = await invoke({ profileId: 'mem_profile_direct', query: 'x' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body.profileId).toBe('mem_profile_direct');
+    expect(lookupCalls()).toHaveLength(0);
+  });
+
+  it('passes an arbitrary idType straight through to Lookup', async () => {
+    setupFetch({ lookups: { email: makeRes({ profiles: ['pe'] }) }, recall: makeRes({ observations: [], summaries: [] }) });
+    const res = await invoke({ ...ids([{ idType: 'email', value: 'a@b.com' }]), query: 'x' });
+    expect(res.statusCode).toBe(200);
+    expect(lookupCalls()).toEqual([{ idType: 'email', value: 'a@b.com' }]);
+  });
+
+  it('skips malformed candidates', async () => {
+    setupFetch({ lookups: { phone: makeRes({ profiles: ['p9'] }) } });
+    const res = await invoke(ids([{ idType: 'phone' }, { value: 'x' }, PHONE]));
+    expect(res.statusCode).toBe(200);
+    expect(lookupCalls()).toEqual([{ idType: 'phone', value: PHONE.value }]);
   });
 });

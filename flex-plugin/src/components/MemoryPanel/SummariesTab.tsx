@@ -5,6 +5,7 @@ import { Card } from '@twilio-paste/core/card';
 import { Text } from '@twilio-paste/core/text';
 import { Paragraph } from '@twilio-paste/core/paragraph';
 import { Stack } from '@twilio-paste/core/stack';
+import { Badge } from '@twilio-paste/core/badge';
 
 import { EmptyState } from './states';
 import { formatTimestamp, formatConversationIds } from '../../utils/format';
@@ -30,16 +31,26 @@ export function SummariesTab({ summaries }: Props) {
           const convos = formatConversationIds(s.conversationIds);
           return (
             <Card key={s.id} padding="space60">
-              {when ? (
-                <Text
-                  as="div"
-                  fontSize="fontSize20"
-                  color="colorTextWeak"
-                  marginBottom="space30"
-                >
-                  {when}
-                </Text>
-              ) : null}
+              <Box
+                display="flex"
+                justifyContent="space-between"
+                alignItems="center"
+                columnGap="space40"
+                marginBottom="space30"
+              >
+                {s.source ? (
+                  <Badge as="span" variant="decorative10">
+                    {s.source}
+                  </Badge>
+                ) : (
+                  <span />
+                )}
+                {when ? (
+                  <Text as="span" fontSize="fontSize20" color="colorTextWeak">
+                    {when}
+                  </Text>
+                ) : null}
+              </Box>
               <Paragraph marginBottom="space0">{s.content}</Paragraph>
               {convos ? (
                 <Text as="div" fontSize="fontSize10" color="colorTextWeak" marginTop="space20">

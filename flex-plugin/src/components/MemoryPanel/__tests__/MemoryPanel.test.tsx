@@ -6,6 +6,7 @@ import { Theme } from '@twilio-paste/core/theme';
 // smoke tests we make it a pass-through so we can drive `task` via props.
 jest.mock('@twilio/flex-ui', () => ({
   withTaskContext: (Component: React.ComponentType) => Component,
+  Manager: { getInstance: () => ({ user: { token: 'test-token' } }) },
 }));
 
 // Stub the tabs shell so the smoke test focuses on MemoryPanel's branching,
@@ -67,7 +68,7 @@ describe('MemoryPanel', () => {
     const tabs = await screen.findByTestId('memory-tabs');
     expect(tabs).toHaveTextContent('observations:1');
     expect(mockFetchMemory).toHaveBeenCalledWith(
-      { identifiers: [{ idType: 'phone', value: '+5511976932682' }] },
+      { identifiers: [{ idType: 'phone', value: '+5511976932682' }], token: 'test-token' },
       expect.anything(),
     );
   });
@@ -83,6 +84,7 @@ describe('MemoryPanel', () => {
           { idType: 'whatsapp', value: 'whatsapp:+5511976932682' },
           { idType: 'phone', value: '+5511976932682' },
         ],
+        token: 'test-token',
       },
       expect.anything(),
     );
