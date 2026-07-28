@@ -16,7 +16,19 @@ import { EmptyState } from './states';
 import { fetchMemory, type MemoryObservation, type MemorySummary } from '../../api/fetchMemory';
 import { searchKnowledge, type KnowledgeChunk } from '../../api/searchKnowledge';
 import { summarize, type SummarizeResponse } from '../../api/summarize';
+import { captureTurn } from '../../api/captureTurn';
+import { getAgentTraits } from '../../utils/flexToken';
 import type { IdentifierCandidate } from '../../utils/identifiers';
+
+/** Compact rendering of search results — the 'assistant' side of a captured search turn. */
+function renderSearchResults(
+  mem: Array<{ content: string }>,
+  kb: Array<{ content: string }>,
+): string {
+  const snip = (items: Array<{ content: string }>, empty: string) =>
+    items.length ? items.slice(0, 3).map((i) => i.content.slice(0, 200)).join(' | ') : empty;
+  return `Memory: ${snip(mem, 'no memory results')}\nKnowledge: ${snip(kb, 'no knowledge results')}`;
+}
 
 interface Props {
   identifiers: IdentifierCandidate[];
@@ -57,26 +69,42 @@ export function SearchTab({ identifiers, profileId, token }: Props) {
     // merge them into one list sorted by score so the most relevant shows first
     // (and is fed to the summarizer first), regardless of type.
     setMemory({ kind: 'loading' });
-    fetchMemory({ identifiers, profileId, query, token })
-      .then((r) =>
-        setMemory({
-          kind: 'ok',
-          items: [...r.observations, ...r.summaries].sort(
-            (a, b) => (b.score ?? 0) - (a.score ?? 0),
-          ),
-        }),
-      )
-      .catch((err) =>
-        setMemory({ kind: 'error', message: err instanceof Error ? err.message : String(err) }),
-      );
+    const memP = fetchMemory({ identifiers, profileId, query, token })
+      .then((r) => {
+        const items = [...r.observations, ...r.summaries].sort(
+          (a, b) => (b.score ?? 0) - (a.score ?? 0),
+        );
+        setMemory({ kind: 'ok', items });
+        return items as Array<{ content: string }>;
+      })
+      .catch((err) => {
+        setMemory({ kind: 'error', message: err instanceof Error ? err.message : String(err) });
+        return [] as Array<{ content: string }>;
+      });
 
     // Knowledge search — org-wide, independent of the customer.
     setKnowledge({ kind: 'loading' });
-    searchKnowledge({ query, token })
-      .then((r) => setKnowledge({ kind: 'ok', items: r.chunks }))
-      .catch((err) =>
-        setKnowledge({ kind: 'error', message: err instanceof Error ? err.message : String(err) }),
-      );
+    const knowP = searchKnowledge({ query, token })
+      .then((r) => {
+        setKnowledge({ kind: 'ok', items: r.chunks });
+        return r.chunks as Array<{ content: string }>;
+      })
+      .catch((err) => {
+        setKnowledge({ kind: 'error', message: err instanceof Error ? err.message : String(err) });
+        return [] as Array<{ content: string }>;
+      });
+
+    // Capture the search turn once both settle (fire-and-forget, agent-productivity).
+    Promise.all([memP, knowP]).then(([mem, kb]) => {
+      captureTurn({
+        kind: 'search',
+        query,
+        answer: renderSearchResults(mem, kb),
+        meta: { memoryCount: mem.length, knowledgeCount: kb.length },
+        agent: getAgentTraits(),
+        token,
+      });
+    });
   };
 
   const runSummarize = () => {
@@ -87,7 +115,21 @@ export function SearchTab({ identifiers, profileId, token }: Props) {
       knowledge: knowledgeItems.map((k) => ({ content: k.content, score: k.score })),
       token,
     })
-      .then((data) => setSummary({ kind: 'ok', data }))
+      .then((data) => {
+        setSummary({ kind: 'ok', data });
+        captureTurn({
+          kind: 'summarize',
+          query: submitted,
+          answer: data.answer,
+          meta: {
+            memoryCount: memItems.length,
+            knowledgeCount: knowledgeItems.length,
+            grounded: data.grounded,
+          },
+          agent: getAgentTraits(),
+          token,
+        });
+      })
       .catch((err) =>
         setSummary({ kind: 'error', message: err instanceof Error ? err.message : String(err) }),
       );
