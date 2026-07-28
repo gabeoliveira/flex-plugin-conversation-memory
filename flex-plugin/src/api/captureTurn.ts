@@ -8,6 +8,8 @@
  * `agent` traits here are display-only enrichment for first-time profiles.
  */
 
+import { captureEnabled } from '../config';
+
 export interface CaptureTurnParams {
   query: string;
   /** For 'search': a compact rendering of results. For 'summarize': the answer. */
@@ -21,6 +23,8 @@ export interface CaptureTurnParams {
 const BASE = (process.env.FLEX_APP_FUNCTIONS_BASE_URL || '').replace(/\/$/, '');
 
 export function captureTurn(params: CaptureTurnParams): void {
+  // Off when the feature flag is disabled (build-time) or nothing to send.
+  if (!captureEnabled()) return;
   if (!BASE || !params.token || !params.query || !params.answer) return;
   const endpoint = BASE.endsWith('/capture-turn') ? BASE : `${BASE}/capture-turn`;
 

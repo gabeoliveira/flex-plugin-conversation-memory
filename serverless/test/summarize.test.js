@@ -88,13 +88,15 @@ describe('summarize', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('500 when OPENAI_API_KEY is missing', async () => {
+  it('degrades to 200 {disabled} when OPENAI_API_KEY is missing (Summarize optional)', async () => {
     mockOpenAI('x');
     const res = await invoke(
       { query: 'q', memory: MEMORY },
       { context: { ...CONTEXT, OPENAI_API_KEY: '' } },
     );
-    expect(res.statusCode).toBe(500);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ disabled: true, grounded: false });
+    expect(global.fetch).not.toHaveBeenCalled(); // no LLM call
   });
 
   it('returns a grounded answer and sends numbered sources to OpenAI', async () => {
