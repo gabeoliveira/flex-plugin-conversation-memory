@@ -9,6 +9,7 @@ import { Button } from '@twilio-paste/core/button';
 import { buildIdentifierCandidates, describeIdentifier } from '../../utils/identifiers';
 import { getFlexToken } from '../../utils/flexToken';
 import { fetchMemory, type MemoryResponse } from '../../api/fetchMemory';
+import { friendlyError } from '../../api/errors';
 import { MemoryTabs } from './MemoryTabs';
 import { LoadingState, EmptyState, ErrorState } from './states';
 
@@ -22,8 +23,25 @@ type PanelState =
   | { kind: 'ok'; data: MemoryResponse }
   | { kind: 'error'; message: string };
 
+/**
+ * Modern Flex channel source: `ConversationHelper.conversationType` derived from
+ * the task's conversation state (`task.channelType` is deprecated). Returns
+ * undefined for voice / non-conversation tasks or if the API shape changes — the
+ * identifier builder then falls back to a channel attribute / address inference.
+ */
+function getConversationType(task?: Flex.ITask): string | undefined {
+  if (!task) return undefined;
+  try {
+    const state = Flex.StateHelper.getConversationStateForTask(task);
+    if (!state) return undefined;
+    return new Flex.ConversationHelper(state).conversationType || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function MemoryPanelImpl({ task }: Props) {
-  const candidates = buildIdentifierCandidates(task?.attributes);
+  const candidates = buildIdentifierCandidates(task?.attributes, getConversationType(task));
   const displayId = describeIdentifier(candidates);
   const token = getFlexToken();
   // Stable dependency for the effect — candidates is rebuilt each render.
@@ -43,7 +61,7 @@ function MemoryPanelImpl({ task }: Props) {
       .then((data) => setState({ kind: 'ok', data }))
       .catch((err) => {
         if (controller.signal.aborted) return;
-        setState({ kind: 'error', message: err instanceof Error ? err.message : String(err) });
+        setState({ kind: 'error', message: friendlyError(err) });
       });
     return () => controller.abort();
     // reloadNonce intentionally retriggers a fresh fetch on manual refresh.
@@ -86,7 +104,17 @@ function MemoryPanelImpl({ task }: Props) {
       ) : state.kind === 'error' ? (
         <ErrorState identifier={displayId} message={state.message} />
       ) : (
-        <MemoryTabs data={state.data} identifiers={candidates} token={token} />
+        <>
+          {state.data.ambiguous ? (
+            <Box marginBottom="space40">
+              <Text as="div" fontSize="fontSize10" color="colorTextWeak">
+                {state.data.profileCount} profiles match this identifier — showing the first. Confirm
+                you have the right customer.
+              </Text>
+            </Box>
+          ) : null}
+          <MemoryTabs data={state.data} identifiers={candidates} token={token} />
+        </>
       )}
     </Box>
   );

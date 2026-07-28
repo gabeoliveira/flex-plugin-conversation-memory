@@ -66,7 +66,7 @@ exports.handler = async function (context, event, callback) {
   if (knowledgeIds.length > 0) body.knowledgeIds = knowledgeIds;
 
   try {
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
       method: 'POST',
       headers: { Authorization: authHeader, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -90,7 +90,7 @@ exports.handler = async function (context, event, callback) {
     response.setBody({ query, chunks });
     return callback(null, response);
   } catch (err) {
-    response.setStatusCode(502);
+    response.setStatusCode(err && err.status === 504 ? 504 : 502);
     response.setBody({
       error: 'knowledge search failed',
       detail: String((err && err.message) || err),
@@ -100,6 +100,27 @@ exports.handler = async function (context, event, callback) {
 };
 
 // --- helpers ----------------------------------------------------------------
+
+// Upstream request timeout (Workstream B1): a hung Knowledge call returns a
+// clean 504 instead of spinning the agent's panel.
+const UPSTREAM_TIMEOUT_MS = 8000;
+
+async function fetchWithTimeout(url, options = {}, ms = UPSTREAM_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (err) {
+    if (err && err.name === 'AbortError') {
+      const e = new Error(`upstream timeout after ${ms}ms: ${(options.method || 'GET')} ${url}`);
+      e.status = 504;
+      throw e;
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 function clampTop(raw) {
   const n = parseInt(raw, 10);

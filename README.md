@@ -112,6 +112,8 @@ interface MemoryResponse {
   identifier: string;                  // candidate value that matched
   matchedBy: string | null;            // idType that matched ('whatsapp' | 'phone' | 'email' | …)
   profileId: string | null;            // null = no profile matched
+  profileCount?: number;               // how many profiles the identifier resolved to
+  ambiguous?: boolean;                 // >1 profile matched (first is used; panel flags it)
   profileCreatedAt: string | null;
   traits: Record<string, Record<string, unknown>>;                 // keyed by Trait Group
   observations: { id; content; createdAt; occurredAt?; conversationIds?; source?; score? }[];
@@ -119,6 +121,7 @@ interface MemoryResponse {
   partial?: boolean;                   // one upstream call failed
 }
 ```
+Upstream failures surface as **502** (service error) or **504** (our 8s/20s request timeout); the plugin maps 401→"session expired", 5xx→"service unavailable".
 
 **`GET /search-knowledge?query=…[&top=5]`** — Enterprise Knowledge **v2** search.
 ```ts
@@ -155,10 +158,10 @@ twilio flex:plugins:release --plugin plugin-conversation-memory@<version> --name
 Set the serverless env vars on the deployed service; restrict `ALLOWED_ORIGINS` to your Flex domain.
 
 ## Tests
-85 total, all green.
+102 total, all green.
 ```bash
-(cd flex-plugin && npm test)   # 33 — identifiers, MemoryPanel, SearchTab, captureTurn, feature flags (jsdom + RTL)
-(cd serverless && npm test)    # 52 — get-memory, search-knowledge, summarize, capture-turn, health, CORS + role gating (node; fetch + token-validator mocked)
+(cd flex-plugin && npm test)   # 45 — identifiers, MemoryPanel, SearchTab, captureTurn, flags, error UX (jsdom + RTL)
+(cd serverless && npm test)    # 57 — get-memory, search-knowledge, summarize, capture-turn, health, CORS, role gating, timeouts (node; fetch + token-validator mocked)
 ```
 Serverless tests live in `serverless/test/` (not `functions/`) so `twilio-run` never deploys them.
 

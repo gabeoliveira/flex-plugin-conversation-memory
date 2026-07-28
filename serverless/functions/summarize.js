@@ -92,7 +92,7 @@ exports.handler = async function (context, event, callback) {
   const user = `Agent question: ${query}\n\nSources:\n${sourceLines.join('\n')}`;
 
   try {
-    const res = await fetch(`${baseUrl}/chat/completions`, {
+    const res = await fetchWithTimeout(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -122,13 +122,34 @@ exports.handler = async function (context, event, callback) {
     response.setBody({ answer, model, grounded: true });
     return callback(null, response);
   } catch (err) {
-    response.setStatusCode(502);
+    response.setStatusCode(err && err.status === 504 ? 504 : 502);
     response.setBody({ error: 'summarize failed', detail: String((err && err.message) || err) });
     return callback(null, response);
   }
 };
 
 // --- helpers ----------------------------------------------------------------
+
+// Upstream request timeout (Workstream B1). OpenAI gets a longer budget than the
+// Twilio calls (grounded synthesis can be slower).
+const OPENAI_TIMEOUT_MS = 20000;
+
+async function fetchWithTimeout(url, options = {}, ms = OPENAI_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (err) {
+    if (err && err.name === 'AbortError') {
+      const e = new Error(`upstream timeout after ${ms}ms: ${(options.method || 'GET')} ${url}`);
+      e.status = 504;
+      throw e;
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /** Parse an items array (JSON string or array) down to [{content, source?, score?}]. */
 function parseItems(raw) {

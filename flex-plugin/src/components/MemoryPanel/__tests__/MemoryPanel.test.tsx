@@ -25,6 +25,7 @@ jest.mock('../../../api/fetchMemory', () => ({
 
 import { MemoryPanel } from '../MemoryPanel';
 import { fetchMemory } from '../../../api/fetchMemory';
+import { ApiError } from '../../../api/errors';
 
 const mockFetchMemory = fetchMemory as jest.MockedFunction<typeof fetchMemory>;
 
@@ -99,5 +100,18 @@ describe('MemoryPanel', () => {
     );
     expect(screen.getByText('boom')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeInTheDocument();
+  });
+
+  it('shows session-expired guidance on a 401 (B3)', async () => {
+    mockFetchMemory.mockRejectedValue(new ApiError(401, 'get-memory 401'));
+    renderPanel({ from: '+5511976932682' });
+    await waitFor(() => expect(screen.getByText(/session expired/i)).toBeInTheDocument());
+  });
+
+  it('shows a subtle note when the identifier resolved to multiple profiles (B2)', async () => {
+    mockFetchMemory.mockResolvedValue({ ...SAMPLE, profileCount: 3, ambiguous: true });
+    renderPanel({ from: '+5511976932682' });
+    await screen.findByTestId('memory-tabs');
+    expect(screen.getByText(/3 profiles match this identifier/i)).toBeInTheDocument();
   });
 });

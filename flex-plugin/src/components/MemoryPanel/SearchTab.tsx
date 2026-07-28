@@ -17,6 +17,7 @@ import { fetchMemory, type MemoryObservation, type MemorySummary } from '../../a
 import { searchKnowledge, type KnowledgeChunk } from '../../api/searchKnowledge';
 import { summarize, type SummarizeResponse } from '../../api/summarize';
 import { captureTurn } from '../../api/captureTurn';
+import { friendlyError } from '../../api/errors';
 import { getAgentTraits } from '../../utils/flexToken';
 import { summarizeEnabled } from '../../config';
 import type { IdentifierCandidate } from '../../utils/identifiers';
@@ -80,7 +81,7 @@ export function SearchTab({ identifiers, profileId, token }: Props) {
         return items as Array<{ content: string }>;
       })
       .catch((err) => {
-        setMemory({ kind: 'error', message: err instanceof Error ? err.message : String(err) });
+        setMemory({ kind: 'error', message: friendlyError(err) });
         return [] as Array<{ content: string }>;
       });
 
@@ -92,7 +93,7 @@ export function SearchTab({ identifiers, profileId, token }: Props) {
         return r.chunks as Array<{ content: string }>;
       })
       .catch((err) => {
-        setKnowledge({ kind: 'error', message: err instanceof Error ? err.message : String(err) });
+        setKnowledge({ kind: 'error', message: friendlyError(err) });
         return [] as Array<{ content: string }>;
       });
 
@@ -132,9 +133,7 @@ export function SearchTab({ identifiers, profileId, token }: Props) {
           token,
         });
       })
-      .catch((err) =>
-        setSummary({ kind: 'error', message: err instanceof Error ? err.message : String(err) }),
-      );
+      .catch((err) => setSummary({ kind: 'error', message: friendlyError(err) }));
   };
 
   return (

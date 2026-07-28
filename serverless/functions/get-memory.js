@@ -74,6 +74,7 @@ exports.handler = async function (context, event, callback) {
     let profileId = givenProfileId;
     let matchedBy = null;
     let matchedIdentifier = '';
+    let profileCount = 0; // how many profiles the matching identifier resolved to
 
     if (!profileId) {
       const identifiers = parseIdentifiers(event.identifiers);
@@ -88,6 +89,9 @@ exports.handler = async function (context, event, callback) {
       for (const { idType, value } of identifiers) {
         const result = await lookupProfile(storeBase, authHeader, idType, value);
         if (result.profiles && result.profiles.length > 0) {
+          // Ambiguous lookups can return several profiles; we use the first but
+          // report the count so the panel can flag it (Workstream B2).
+          profileCount = result.profiles.length;
           profileId = result.profiles[0];
           matchedBy = idType;
           matchedIdentifier = value;
@@ -142,13 +146,13 @@ exports.handler = async function (context, event, callback) {
 
     // Search mode: Recall is the whole result — its failure is fatal.
     if (query && recallFailed) {
-      response.setStatusCode(502);
+      response.setStatusCode(upstreamStatus(recall.__error));
       response.setBody({ error: 'memora recall failed', detail: errString(recall.__error) });
       return callback(null, response);
     }
     // Panel mode: fatal only if BOTH traits and recall failed.
     if (!query && recallFailed && profileError) {
-      response.setStatusCode(502);
+      response.setStatusCode(upstreamStatus(recall.__error || profileError));
       response.setBody({ error: 'memora fetch failed', detail: errString(profileError) });
       return callback(null, response);
     }
@@ -158,6 +162,8 @@ exports.handler = async function (context, event, callback) {
       identifier: matchedIdentifier,
       matchedBy,
       profileId,
+      profileCount,
+      ambiguous: profileCount > 1,
       profileCreatedAt,
       traits,
       observations: !recallFailed && Array.isArray(recall.observations) ? recall.observations : [],
@@ -166,7 +172,7 @@ exports.handler = async function (context, event, callback) {
     });
     return callback(null, response);
   } catch (err) {
-    response.setStatusCode(502);
+    response.setStatusCode(upstreamStatus(err));
     response.setBody({ error: 'memora fetch failed', detail: errString(err) });
     return callback(null, response);
   }
@@ -179,6 +185,8 @@ function emptyPayload(identifier) {
     identifier: identifier || '',
     matchedBy: null,
     profileId: null,
+    profileCount: 0,
+    ambiguous: false,
     profileCreatedAt: null,
     traits: {},
     observations: [],
@@ -245,8 +253,29 @@ async function lookupProfile(storeBase, authHeader, idType, value) {
   return { normalizedValue: data.normalizedValue, profiles: data.profiles || [] };
 }
 
+// Upstream request timeout (Workstream B1): a hung Memora call returns a clean
+// 504 instead of spinning the agent's panel indefinitely.
+const UPSTREAM_TIMEOUT_MS = 8000;
+
+async function fetchWithTimeout(url, options = {}, ms = UPSTREAM_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (err) {
+    if (err && err.name === 'AbortError') {
+      const e = new Error(`upstream timeout after ${ms}ms: ${(options.method || 'GET')} ${url}`);
+      e.status = 504;
+      throw e;
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function getJson(url, options) {
-  const res = await fetch(url, options);
+  const res = await fetchWithTimeout(url, options);
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     const err = new Error(`${options.method} ${url} → ${res.status}: ${body}`);
@@ -254,6 +283,11 @@ async function getJson(url, options) {
     throw err;
   }
   return res.json();
+}
+
+/** Map an upstream failure to a gateway status: 504 for our timeouts, else 502. */
+function upstreamStatus(err) {
+  return err && err.status === 504 ? 504 : 502;
 }
 
 function errString(err) {

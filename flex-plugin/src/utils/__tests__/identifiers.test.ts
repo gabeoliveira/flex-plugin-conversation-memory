@@ -76,6 +76,51 @@ describe('buildIdentifierCandidates', () => {
     // phone is pushed once (native) and the universal fallback dedupes.
     expect(result).toEqual([{ idType: 'phone', value: '+5511976932682' }]);
   });
+
+  it('reads a conversationType attribute (modern) the same as channelType', () => {
+    expect(
+      buildIdentifierCandidates({
+        conversationType: 'whatsapp',
+        customerAddress: 'whatsapp:+5511976932682',
+      }),
+    ).toEqual([
+      { idType: 'whatsapp', value: 'whatsapp:+5511976932682' },
+      { idType: 'phone', value: '+5511976932682' },
+    ]);
+  });
+
+  it('conversationType attribute wins over a legacy channelType attribute', () => {
+    // conversationType says whatsapp → whatsapp-native first; channelType=sms ignored.
+    expect(
+      buildIdentifierCandidates({
+        conversationType: 'whatsapp',
+        channelType: 'sms',
+        customerAddress: 'whatsapp:+5511976932682',
+      }),
+    ).toEqual([
+      { idType: 'whatsapp', value: 'whatsapp:+5511976932682' },
+      { idType: 'phone', value: '+5511976932682' },
+    ]);
+  });
+
+  it('the channelOverride param (ConversationHelper.conversationType) wins over attributes', () => {
+    // The task attribute says sms, but the resolved conversationType is whatsapp.
+    expect(
+      buildIdentifierCandidates(
+        { channelType: 'sms', customerAddress: 'whatsapp:+5511976932682' },
+        'whatsapp',
+      ),
+    ).toEqual([
+      { idType: 'whatsapp', value: 'whatsapp:+5511976932682' },
+      { idType: 'phone', value: '+5511976932682' },
+    ]);
+  });
+
+  it('ignores an empty channelOverride and falls back to attributes', () => {
+    expect(
+      buildIdentifierCandidates({ channelType: 'sms', from: '+5511976932682' }, ''),
+    ).toEqual([{ idType: 'phone', value: '+5511976932682' }]);
+  });
 });
 
 describe('describeIdentifier', () => {

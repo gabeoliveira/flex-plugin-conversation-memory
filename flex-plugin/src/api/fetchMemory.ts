@@ -9,6 +9,7 @@
  */
 
 import type { IdentifierCandidate } from '../utils/identifiers';
+import { apiErrorFromResponse } from './errors';
 
 export interface MemoryObservation {
   id: string;
@@ -44,6 +45,10 @@ export interface MemoryResponse {
   traits: Record<string, Record<string, unknown>>;
   observations: MemoryObservation[];
   summaries: MemorySummary[];
+  /** How many profiles the matching identifier resolved to (0 when none matched). */
+  profileCount?: number;
+  /** True when the identifier resolved to more than one profile (first is used). */
+  ambiguous?: boolean;
   /** True when one upstream call (profile or recall) failed but the other succeeded. */
   partial?: boolean;
 }
@@ -83,8 +88,7 @@ export async function fetchMemory(
     headers: { Authorization: `Bearer ${params.token}` },
   });
   if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`get-memory ${res.status}: ${body || res.statusText}`);
+    throw await apiErrorFromResponse(res, 'get-memory');
   }
   return (await res.json()) as MemoryResponse;
 }

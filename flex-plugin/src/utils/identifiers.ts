@@ -51,16 +51,31 @@ function firstEmail(attrs: Record<string, unknown>, keys: string[]): string | nu
   return null;
 }
 
-export function buildIdentifierCandidates(attrs?: Record<string, unknown>): IdentifierCandidate[] {
+/**
+ * @param channelOverride the resolved conversation channel, normally
+ *   `ConversationHelper.conversationType` supplied by the caller (the modern
+ *   Flex source of truth — `task.channelType` is deprecated). Optional so the
+ *   util stays pure/testable; when omitted we fall back to a channel attribute.
+ */
+export function buildIdentifierCandidates(
+  attrs?: Record<string, unknown>,
+  channelOverride?: string,
+): IdentifierCandidate[] {
   if (!attrs) return [];
 
   const address = firstString(attrs, ADDRESS_KEYS);
   const phone = firstPhone(attrs, PHONE_KEYS);
   const email = firstEmail(attrs, EMAIL_KEYS);
 
-  // Prefer the task's declared channel; fall back to inferring from the address.
+  // Channel resolution, most-authoritative first:
+  //  1) explicit override — the caller's ConversationHelper.conversationType
+  //  2) a conversationType / channelType task attribute (legacy / back-compat;
+  //     read via firstString so there's no deprecated `.channelType` access)
+  //  3) inferred from a whatsapp: address prefix
+  const channelAttr = firstString(attrs, ['conversationType', 'channelType']);
   const channel =
-    (typeof attrs.channelType === 'string' && attrs.channelType.toLowerCase()) ||
+    (channelOverride && channelOverride.toLowerCase()) ||
+    (channelAttr && channelAttr.toLowerCase()) ||
     (address && /^whatsapp:/i.test(address) ? 'whatsapp' : '');
 
   const candidates: IdentifierCandidate[] = [];

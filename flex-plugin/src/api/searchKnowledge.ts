@@ -6,6 +6,8 @@
  * sent as Authorization: Bearer and validated server-side.
  */
 
+import { apiErrorFromResponse } from './errors';
+
 export interface KnowledgeChunk {
   content: string;
   score?: number;
@@ -43,8 +45,7 @@ export async function searchKnowledge(
     headers: { Authorization: `Bearer ${params.token}` },
   });
   if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`search-knowledge ${res.status}: ${body || res.statusText}`);
+    throw await apiErrorFromResponse(res, 'search-knowledge');
   }
   return (await res.json()) as KnowledgeSearchResponse;
 }

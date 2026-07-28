@@ -104,6 +104,42 @@ describe('get-memory — CORS origin locking', () => {
   });
 });
 
+describe('get-memory — robustness (B1 timeout / B2 multi-profile)', () => {
+  it('504 when an upstream call times out (AbortError)', async () => {
+    global.fetch = jest.fn(async () => {
+      const e = new Error('aborted');
+      e.name = 'AbortError';
+      throw e;
+    });
+    const res = await invoke(ids([PHONE]));
+    expect(res.statusCode).toBe(504);
+  });
+
+  it('flags ambiguous + reports the count when a lookup resolves to multiple profiles', async () => {
+    setupFetch({
+      lookups: { phone: makeRes({ profiles: ['p1', 'p2'] }) },
+      recall: makeRes({ observations: [], summaries: [] }),
+      profile: makeRes({ id: 'p1', createdAt: 't', traits: {} }),
+    });
+    const res = await invoke(ids([PHONE]));
+    expect(res.statusCode).toBe(200);
+    expect(res.body.profileId).toBe('p1'); // still uses the first
+    expect(res.body.profileCount).toBe(2);
+    expect(res.body.ambiguous).toBe(true);
+  });
+
+  it('a single-profile match is not ambiguous', async () => {
+    setupFetch({
+      lookups: { phone: makeRes({ profiles: ['p1'] }) },
+      recall: makeRes({ observations: [], summaries: [] }),
+      profile: makeRes({ id: 'p1', createdAt: 't', traits: {} }),
+    });
+    const res = await invoke(ids([PHONE]));
+    expect(res.body.profileCount).toBe(1);
+    expect(res.body.ambiguous).toBe(false);
+  });
+});
+
 describe('get-memory — optional role gating', () => {
   it('no gating by default (REQUIRED_ROLE unset), even with no roles on the token', async () => {
     setupFetch();

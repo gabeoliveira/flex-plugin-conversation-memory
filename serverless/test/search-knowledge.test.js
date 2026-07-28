@@ -126,4 +126,14 @@ describe('search-knowledge', () => {
     const res = await invoke({ query: 'x' });
     expect(res.statusCode).toBe(502);
   });
+
+  it('504 when the knowledge search times out (AbortError)', async () => {
+    global.fetch = jest.fn(async () => {
+      const e = new Error('aborted');
+      e.name = 'AbortError';
+      throw e;
+    });
+    const res = await invoke({ query: 'x' });
+    expect(res.statusCode).toBe(504);
+  });
 });

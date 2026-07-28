@@ -141,7 +141,7 @@ function readConfig(context) {
  * open conversation per profile — a duplicate POST 409s with the open id.
  */
 async function getOrCreateSession(cfg, agentKey) {
-  const res = await fetch(`${cfg.convBase}/v2/Conversations`, {
+  const res = await fetchWithTimeout(`${cfg.convBase}/v2/Conversations`, {
     method: 'POST',
     headers: { Authorization: cfg.authHeader, 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -189,7 +189,7 @@ function parseExistingConversationId(text) {
 }
 
 async function fetchParticipants(cfg, conversationId) {
-  const res = await fetch(`${cfg.convBase}/v2/Conversations/${conversationId}/Participants`, {
+  const res = await fetchWithTimeout(`${cfg.convBase}/v2/Conversations/${conversationId}/Participants`, {
     headers: { Authorization: cfg.authHeader },
   });
   if (!res.ok) throw new Error(`fetchParticipants ${res.status}: ${await res.text()}`);
@@ -207,7 +207,7 @@ async function fetchParticipants(cfg, conversationId) {
 async function ensureAgentProfile(cfg, agentKey, agentTraits) {
   const storeBase = `${cfg.memoryBase}/v1/Stores/${encodeURIComponent(cfg.memoryStoreId)}`;
   try {
-    const found = await fetch(`${storeBase}/Profiles/Lookup`, {
+    const found = await fetchWithTimeout(`${storeBase}/Profiles/Lookup`, {
       method: 'POST',
       headers: { Authorization: cfg.authHeader, 'Content-Type': 'application/json' },
       body: JSON.stringify({ idType: cfg.idType, value: agentKey }),
@@ -217,7 +217,7 @@ async function ensureAgentProfile(cfg, agentKey, agentTraits) {
       if (data && Array.isArray(data.profiles) && data.profiles.length > 0) return;
     }
     // Not found → create. idTypePromotion on the traits attaches the identifiers.
-    await fetch(`${storeBase}/Profiles`, {
+    await fetchWithTimeout(`${storeBase}/Profiles`, {
       method: 'POST',
       headers: { Authorization: cfg.authHeader, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -252,7 +252,7 @@ async function insertTurn(cfg, session, agentKey, query, answer) {
 }
 
 async function insertCommunication(cfg, conversationId, threadId, author, recipients, text) {
-  const res = await fetch(`${cfg.convBase}/v2/Conversations/${conversationId}/Communications`, {
+  const res = await fetchWithTimeout(`${cfg.convBase}/v2/Conversations/${conversationId}/Communications`, {
     method: 'POST',
     headers: { Authorization: cfg.authHeader, 'Content-Type': 'application/json' },
     body: JSON.stringify({ channelId: threadId, author, recipients, content: { type: 'TEXT', text } }),
@@ -296,6 +296,27 @@ function bearerToken(event) {
   const headers = (event.request && event.request.headers) || {};
   const raw = headers.authorization || headers.Authorization || '';
   return raw.startsWith('Bearer ') ? raw.slice(7).trim() : null;
+}
+
+// Upstream request timeout (Workstream B1): capture-turn is fire-and-forget, but
+// a hung CO/Memora call shouldn't keep the function invocation alive indefinitely.
+const UPSTREAM_TIMEOUT_MS = 8000;
+
+async function fetchWithTimeout(url, options = {}, ms = UPSTREAM_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (err) {
+    if (err && err.name === 'AbortError') {
+      const e = new Error(`upstream timeout after ${ms}ms: ${(options.method || 'GET')} ${url}`);
+      e.status = 504;
+      throw e;
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function applyCors(response, context, event) {

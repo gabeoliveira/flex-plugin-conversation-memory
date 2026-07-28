@@ -119,6 +119,16 @@ describe('summarize', () => {
     expect(res.statusCode).toBe(502);
   });
 
+  it('504 when OpenAI times out (AbortError)', async () => {
+    global.fetch = jest.fn(async () => {
+      const e = new Error('aborted');
+      e.name = 'AbortError';
+      throw e;
+    });
+    const res = await invoke({ query: 'q', memory: MEMORY });
+    expect(res.statusCode).toBe(504);
+  });
+
   it('accepts JSON-string arrays for memory/knowledge', async () => {
     mockOpenAI('ok');
     const res = await invoke({

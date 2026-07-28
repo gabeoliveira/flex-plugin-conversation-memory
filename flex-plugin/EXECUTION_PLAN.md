@@ -248,13 +248,14 @@ self-deploy). Connecting theme: **safe by default, configurable without a rebuil
   token's `roles`; when `REQUIRED_ROLE` is set, anyone lacking it gets 403 before any upstream
   call. Unset = allow all authenticated agents (no behavior change).
 
-### Workstream B — Robustness
-- **B1** `fetchWithTimeout` (AbortController) on **every** upstream call in all 4 functions
-  (~8s default, ~20s OpenAI) → clean 504 instead of a spinning panel.
-- **B2** Multi-profile: `get-memory` `Lookup` can return several; keep `[0]` but return
-  `profileCount`/`ambiguous`; panel shows a subtle "multiple profiles matched" note.
-- **B3** Error UX: api layer throws **typed** errors (status); panel distinguishes 401
-  ("session expired — reload Flex") from 5xx ("memory service unavailable — retry").
+### Workstream B — Robustness ✅ (shipped in `@0.0.6`)
+- **B1** ✅ `fetchWithTimeout` (AbortController) on every upstream call in all 4 functions
+  (8s default, 20s OpenAI) → a hung call returns a clean **504** instead of spinning the panel.
+- **B2** ✅ Multi-profile: `get-memory` returns `profileCount`/`ambiguous` (still uses `[0]`);
+  the panel shows a subtle "N profiles match — showing the first" note.
+- **B3** ✅ Error UX: the api layer throws a typed `ApiError` (carries status); `friendlyError`
+  maps 401 → "session expired, reload Flex", 5xx (incl. 504) → "service unavailable, try again",
+  AbortError → "" (ignored). Wired into `MemoryPanel` + `SearchTab`.
 
 ### Workstream C — Perf / UX
 - **C1** Client-side cache (short TTL, keyed by the identifier candidate list + trait groups);
@@ -271,8 +272,12 @@ self-deploy). Connecting theme: **safe by default, configurable without a rebuil
 - **D4** *(opt-in)* `communications` tab — recent cross-channel messages behind a flag, PII-aware.
 
 ### Workstream E — Forward-compat / ops
-- **E1** `channelType` → `conversationType` via `ConversationHelper` (not 1:1; keep
-  `channelType` as fallback). Silences the deploy validator; update `identifiers.ts` tests.
+- **E1** ✅ `channelType` → `conversationType`. `MemoryPanel` derives the channel from
+  `StateHelper.getConversationStateForTask(task)` + `ConversationHelper.conversationType`
+  (safe: returns undefined for voice/non-conversation tasks) and passes it as an override to
+  `buildIdentifierCandidates`; the util keeps a `conversationType`/`channelType` **attribute**
+  fallback, read via `firstString` so no deprecated `.channelType` access remains. Deploy
+  validator now reports **0 issues**. Shipped in `@0.0.5`.
 - **E2** Verify attribute-key lists + channel map against **real handoff tasks**
   (`identifiers.ts` is the single tuning point).
 - **E3** GA docs: CIRL webhook wiring (operator displayName already stable), custom Flex

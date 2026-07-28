@@ -7,6 +7,8 @@
  * validated server-side.
  */
 
+import { apiErrorFromResponse } from './errors';
+
 export interface SummarizeSource {
   content: string;
   source?: string;
@@ -52,8 +54,7 @@ export async function summarize(
     }),
   });
   if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`summarize ${res.status}: ${body || res.statusText}`);
+    throw await apiErrorFromResponse(res, 'summarize');
   }
   return (await res.json()) as SummarizeResponse;
 }
