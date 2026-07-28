@@ -55,9 +55,11 @@ agent query ─▶ in parallel:
 
 ## Auth
 
-All three endpoints validate the agent's Flex token server-side before any upstream call:
+All endpoints validate the agent's Flex token server-side before any upstream call:
 - Plugin reads `Flex.Manager.getInstance().user.token` ([`utils/flexToken.ts`](flex-plugin/src/utils/flexToken.ts)) and sends `Authorization: Bearer …`.
 - Each Function handles the CORS `OPTIONS` preflight first, then validates with `twilio-flex-token-validator` and 401s anything unauthenticated. (Manual validation, not `functionValidator`, because the latter would 401 the browser preflight.) The token never rides in a URL.
+
+**CORS lock (Phase 7 · A1).** `ALLOWED_ORIGINS` must be your Flex domain(s), not `*` — the proxy returns customer PII. After deploy, `GET /health` should report `{ corsLocked: true }`. Note: Twilio's platform auto-answers the OPTIONS **preflight** with wildcard CORS (so an OPTIONS probe shows `*`), but that carries no data — enforcement is on the actual GET/POST response, where a disallowed origin gets a non-matching `Access-Control-Allow-Origin` and the browser blocks the read. Verify against a GET/POST, not an OPTIONS.
 
 ## CRM container placement
 
@@ -153,10 +155,10 @@ twilio flex:plugins:release --plugin plugin-conversation-memory@<version> --name
 Set the serverless env vars on the deployed service; restrict `ALLOWED_ORIGINS` to your Flex domain.
 
 ## Tests
-74 total, all green.
+85 total, all green.
 ```bash
 (cd flex-plugin && npm test)   # 33 — identifiers, MemoryPanel, SearchTab, captureTurn, feature flags (jsdom + RTL)
-(cd serverless && npm test)    # 41 — get-memory, search-knowledge, summarize, capture-turn (node; fetch + token-validator mocked)
+(cd serverless && npm test)    # 52 — get-memory, search-knowledge, summarize, capture-turn, health, CORS + role gating (node; fetch + token-validator mocked)
 ```
 Serverless tests live in `serverless/test/` (not `functions/`) so `twilio-run` never deploys them.
 

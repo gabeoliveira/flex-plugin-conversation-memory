@@ -83,6 +83,51 @@ afterEach(() => {
   jest.resetAllMocks();
 });
 
+describe('get-memory — CORS origin locking', () => {
+  // Unit-tests applyCors via an OPTIONS event (no token/fetch needed). NOTE: in
+  // production Twilio's platform hijacks the OPTIONS preflight with wildcard CORS,
+  // so real enforcement is on the GET/POST response — which runs this same
+  // applyCors. So this validates the logic that actually gates data.
+  function preflight(origin, allowed) {
+    const event = { request: { method: 'OPTIONS', headers: { origin } } };
+    return new Promise((resolve) =>
+      handler({ ...CONTEXT, ALLOWED_ORIGINS: allowed }, event, (_e, r) => resolve(r)),
+    );
+  }
+  it('echoes an allowed origin', async () => {
+    const r = await preflight('https://flex.twilio.com', 'https://flex.twilio.com');
+    expect(r.headers['Access-Control-Allow-Origin']).toBe('https://flex.twilio.com');
+  });
+  it('does NOT echo a disallowed origin when locked', async () => {
+    const r = await preflight('https://evil.example', 'https://flex.twilio.com');
+    expect(r.headers['Access-Control-Allow-Origin']).not.toBe('https://evil.example');
+  });
+});
+
+describe('get-memory — optional role gating', () => {
+  it('no gating by default (REQUIRED_ROLE unset), even with no roles on the token', async () => {
+    setupFetch();
+    validator.mockResolvedValue({}); // no roles
+    const res = await invoke(ids([PHONE]));
+    expect(res.statusCode).not.toBe(403);
+  });
+
+  it('403 when REQUIRED_ROLE is set and the token lacks it', async () => {
+    setupFetch();
+    validator.mockResolvedValue({ roles: ['agent'] });
+    const res = await invoke(ids([PHONE]), { context: { ...CONTEXT, REQUIRED_ROLE: 'supervisor' } });
+    expect(res.statusCode).toBe(403);
+    expect(global.fetch).not.toHaveBeenCalled(); // gated before any upstream call
+  });
+
+  it('proceeds when the token carries the required role', async () => {
+    setupFetch();
+    validator.mockResolvedValue({ roles: ['supervisor', 'agent'] });
+    const res = await invoke(ids([PHONE]), { context: { ...CONTEXT, REQUIRED_ROLE: 'supervisor' } });
+    expect(res.statusCode).not.toBe(403);
+  });
+});
+
 describe('get-memory — auth', () => {
   it('401 when no Flex token is present', async () => {
     setupFetch();

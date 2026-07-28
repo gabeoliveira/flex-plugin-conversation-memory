@@ -41,6 +41,11 @@ exports.handler = async function (context, event, callback) {
     response.setBody({ error: 'missing or invalid Flex token' });
     return callback(null, response);
   }
+  if (roleForbidden(context, auth)) {
+    response.setStatusCode(403);
+    response.setBody({ error: `forbidden: requires role '${context.REQUIRED_ROLE.trim()}'` });
+    return callback(null, response);
+  }
   // Trusted agent key from the token (never the client) — the CHAT address that
   // resolves to the agent's profile under GROUP_BY_PROFILE.
   const agentKey = auth.workerSid || auth.identity;
@@ -261,6 +266,15 @@ async function insertCommunication(cfg, conversationId, threadId, author, recipi
 
 // --- auth (returns the agent identity, unlike get-memory/summarize) ---------
 
+/**
+ * Optional role gate (off by default). When REQUIRED_ROLE is set, the validated
+ * token must carry that role (Flex token `roles`), else the request is forbidden.
+ */
+function roleForbidden(context, auth) {
+  const requiredRole = (context.REQUIRED_ROLE || '').trim();
+  return requiredRole !== '' && !(auth.roles || []).includes(requiredRole);
+}
+
 async function validateFlexToken(context, event) {
   const token = bearerToken(event) || event.Token || null;
   if (!token) return { valid: false };
@@ -271,6 +285,7 @@ async function validateFlexToken(context, event) {
       valid: true,
       identity: r && r.identity,
       workerSid: r && (r.worker_sid || r.workerSid),
+      roles: (r && r.roles) || [],
     };
   } catch (err) {
     return { valid: false, error: err };

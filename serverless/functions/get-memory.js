@@ -38,6 +38,11 @@ exports.handler = async function (context, event, callback) {
     response.setBody({ error: 'missing or invalid Flex token' });
     return callback(null, response);
   }
+  if (roleForbidden(context, auth)) {
+    response.setStatusCode(403);
+    response.setBody({ error: `forbidden: requires role '${context.REQUIRED_ROLE.trim()}'` });
+    return callback(null, response);
+  }
 
   // --- Config ----------------------------------------------------------------
   const apiKey = context.TWILIO_API_KEY;
@@ -182,13 +187,22 @@ function emptyPayload(identifier) {
 }
 
 /** Validate the agent's Flex token (from an Authorization: Bearer header, or event.Token). */
+/**
+ * Optional role gate (off by default). When REQUIRED_ROLE is set, the validated
+ * token must carry that role (Flex token `roles`), else the request is forbidden.
+ */
+function roleForbidden(context, auth) {
+  const requiredRole = (context.REQUIRED_ROLE || '').trim();
+  return requiredRole !== '' && !(auth.roles || []).includes(requiredRole);
+}
+
 async function validateFlexToken(context, event) {
   const token = bearerToken(event) || event.Token || null;
   if (!token) return { valid: false };
   try {
     const { validator } = require('twilio-flex-token-validator');
-    await validator(token, context.ACCOUNT_SID, context.AUTH_TOKEN);
-    return { valid: true };
+    const r = await validator(token, context.ACCOUNT_SID, context.AUTH_TOKEN);
+    return { valid: true, roles: (r && r.roles) || [] };
   } catch (err) {
     return { valid: false, error: err };
   }
