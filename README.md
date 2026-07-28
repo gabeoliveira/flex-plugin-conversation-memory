@@ -158,9 +158,9 @@ twilio flex:plugins:release --plugin plugin-conversation-memory@<version> --name
 Set the serverless env vars on the deployed service; restrict `ALLOWED_ORIGINS` to your Flex domain.
 
 ## Tests
-102 total, all green.
+109 total, all green.
 ```bash
-(cd flex-plugin && npm test)   # 45 — identifiers, MemoryPanel, SearchTab, captureTurn, flags, error UX (jsdom + RTL)
+(cd flex-plugin && npm test)   # 52 — identifiers, MemoryPanel, SearchTab, captureTurn, flags, error UX, i18n (jsdom + RTL)
 (cd serverless && npm test)    # 57 — get-memory, search-knowledge, summarize, capture-turn, health, CORS, role gating, timeouts (node; fetch + token-validator mocked)
 ```
 Serverless tests live in `serverless/test/` (not `functions/`) so `twilio-run` never deploys them.

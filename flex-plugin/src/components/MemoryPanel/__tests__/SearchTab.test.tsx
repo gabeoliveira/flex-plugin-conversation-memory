@@ -2,6 +2,10 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Theme } from '@twilio-paste/core/theme';
 
+// i18n → @twilio/flex-ui; stub Flex so getStrings resolves to en under jsdom.
+jest.mock('@twilio/flex-ui', () => ({
+  Manager: { getInstance: () => ({ localization: { localeTag: 'en-US' } }) },
+}));
 jest.mock('../../../api/fetchMemory', () => ({ fetchMemory: jest.fn() }));
 jest.mock('../../../api/searchKnowledge', () => ({ searchKnowledge: jest.fn() }));
 jest.mock('../../../api/summarize', () => ({ summarize: jest.fn() }));

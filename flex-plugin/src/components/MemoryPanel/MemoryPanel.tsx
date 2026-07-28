@@ -10,6 +10,7 @@ import { buildIdentifierCandidates, describeIdentifier } from '../../utils/ident
 import { getFlexToken } from '../../utils/flexToken';
 import { fetchMemory, type MemoryResponse } from '../../api/fetchMemory';
 import { friendlyError } from '../../api/errors';
+import { getStrings } from '../../i18n';
 import { MemoryTabs } from './MemoryTabs';
 import { LoadingState, EmptyState, ErrorState } from './states';
 
@@ -41,6 +42,7 @@ function getConversationType(task?: Flex.ITask): string | undefined {
 }
 
 function MemoryPanelImpl({ task }: Props) {
+  const s = getStrings();
   const candidates = buildIdentifierCandidates(task?.attributes, getConversationType(task));
   const displayId = describeIdentifier(candidates);
   const token = getFlexToken();
@@ -69,7 +71,7 @@ function MemoryPanelImpl({ task }: Props) {
   }, [candidatesKey, reloadNonce]);
 
   if (candidates.length === 0) {
-    return <EmptyState message="No customer identifier on this task." />;
+    return <EmptyState message={s.noIdentifier} />;
   }
 
   return (
@@ -82,7 +84,7 @@ function MemoryPanelImpl({ task }: Props) {
         marginBottom="space40"
       >
         <Text as="div" fontWeight="fontWeightSemibold" fontSize="fontSize30">
-          Customer Memory
+          {s.panelTitle}
           {displayId ? (
             <Text as="span" fontWeight="fontWeightNormal" color="colorTextWeak">
               {' '}· {displayId}
@@ -95,7 +97,7 @@ function MemoryPanelImpl({ task }: Props) {
           onClick={() => setReloadNonce((n) => n + 1)}
           disabled={state.kind === 'loading'}
         >
-          Refresh
+          {s.refresh}
         </Button>
       </Box>
 
@@ -108,8 +110,7 @@ function MemoryPanelImpl({ task }: Props) {
           {state.data.ambiguous ? (
             <Box marginBottom="space40">
               <Text as="div" fontSize="fontSize10" color="colorTextWeak">
-                {state.data.profileCount} profiles match this identifier — showing the first. Confirm
-                you have the right customer.
+                {s.ambiguousProfiles(state.data.profileCount ?? 0)}
               </Text>
             </Box>
           ) : null}

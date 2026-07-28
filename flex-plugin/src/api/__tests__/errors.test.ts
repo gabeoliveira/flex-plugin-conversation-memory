@@ -1,3 +1,9 @@
+// errors → i18n → @twilio/flex-ui; stub Flex so getStrings resolves to a locale
+// (its real bundle can't load under jsdom).
+jest.mock('@twilio/flex-ui', () => ({
+  Manager: { getInstance: () => ({ localization: { localeTag: 'en-US' } }) },
+}));
+
 import { ApiError, friendlyError } from '../errors';
 
 describe('friendlyError (B3 auth-vs-upstream UX)', () => {

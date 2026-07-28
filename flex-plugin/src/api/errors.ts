@@ -8,6 +8,8 @@
  * "get-memory 502: ..." string at the agent.
  */
 
+import { getStrings } from '../i18n';
+
 export class ApiError extends Error {
   status: number;
   detail?: string;
@@ -32,9 +34,10 @@ export async function apiErrorFromResponse(res: Response, label: string): Promis
  */
 export function friendlyError(err: unknown): string {
   if (err instanceof DOMException && err.name === 'AbortError') return '';
+  const s = getStrings();
   const status = err instanceof ApiError ? err.status : 0;
-  if (status === 401) return 'Your Flex session expired. Reload Flex and try again.';
-  if (status === 403) return 'You do not have permission to view customer memory.';
-  if (status >= 500) return 'The memory service is unavailable right now. Try again in a moment.';
+  if (status === 401) return s.errSessionExpired;
+  if (status === 403) return s.errForbidden;
+  if (status >= 500) return s.errUnavailable;
   return err instanceof Error ? err.message : String(err);
 }

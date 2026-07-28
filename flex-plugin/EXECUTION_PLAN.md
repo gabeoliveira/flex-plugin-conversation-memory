@@ -263,8 +263,10 @@ self-deploy). Connecting theme: **safe by default, configurable without a rebuil
 - **C2** "Load more" for observations/summaries beyond Recall's 10/5 (limits already camelCase).
 
 ### Workstream D — Reusability / GA *(config-driven is the theme)*
-- **D1 i18n** — externalize all strings into `strings/{locale}.ts` + a `t()` helper; ship
-  `en` + `pt-BR` (repo already runs pt-BR demos). Locale from config.
+- **D1 i18n** ✅ (shipped `@0.0.7`). All user-facing strings live in `src/i18n/{en,pt-BR}.ts`
+  behind a typed `Strings` shape; `getStrings()` follows Flex's `Manager…localization.localeTag`
+  (primary-subtag fallback, `en` default) and accepts an **override** (the D3 runtime-config hook).
+  `friendlyError` is localized too. Adding a locale = one file (compiler enforces completeness).
 - **D2** Configurable **trait-group display** (order / labels / visibility) via config.
 - **D3 Runtime config** — promote the build-time flags + `CRM_MODE` + locale + trait config
   to read from Flex `ui_attributes` so customers configure **without a rebuild**; build-time

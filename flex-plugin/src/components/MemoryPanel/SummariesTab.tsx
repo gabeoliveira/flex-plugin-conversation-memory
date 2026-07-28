@@ -8,6 +8,7 @@ import { Stack } from '@twilio-paste/core/stack';
 import { Badge } from '@twilio-paste/core/badge';
 
 import { EmptyState } from './states';
+import { getStrings } from '../../i18n';
 import { formatTimestamp, formatConversationIds } from '../../utils/format';
 import type { MemorySummary } from '../../api/fetchMemory';
 
@@ -18,7 +19,7 @@ interface Props {
 /** Conversation summaries as a list of cards, newest first. */
 export function SummariesTab({ summaries }: Props) {
   if (summaries.length === 0) {
-    return <EmptyState message="No summaries recorded for this customer." />;
+    return <EmptyState message={getStrings().noSummaries} />;
   }
 
   const sorted = [...summaries].sort((a, b) => timeOf(b) - timeOf(a));

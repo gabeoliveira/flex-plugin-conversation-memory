@@ -8,6 +8,7 @@ import { Stack } from '@twilio-paste/core/stack';
 import { Text } from '@twilio-paste/core/text';
 
 import { EmptyState } from './states';
+import { getStrings } from '../../i18n';
 
 interface Props {
   traits: Record<string, Record<string, unknown>>;
@@ -48,7 +49,7 @@ export function TraitsTab({ traits }: Props) {
   );
 
   if (groups.length === 0) {
-    return <EmptyState message="No traits recorded for this customer." />;
+    return <EmptyState message={getStrings().noTraits} />;
   }
 
   return (

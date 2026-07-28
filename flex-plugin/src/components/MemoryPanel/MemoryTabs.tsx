@@ -9,6 +9,7 @@ import { ObservationsTab } from './ObservationsTab';
 import { SummariesTab } from './SummariesTab';
 import { SearchTab } from './SearchTab';
 import { PartialBanner } from './states';
+import { getStrings } from '../../i18n';
 import type { MemoryResponse } from '../../api/fetchMemory';
 import type { IdentifierCandidate } from '../../utils/identifiers';
 
@@ -30,6 +31,7 @@ function TabCount({ count }: { count: number }) {
 }
 
 export function MemoryTabs({ data, identifiers, token }: Props) {
+  const s = getStrings();
   const tabState = useTabState({ baseId: 'memory-tabs', selectedId: 'traits' });
 
   const traitGroupCount = Object.keys(data.traits || {}).length;
@@ -40,20 +42,20 @@ export function MemoryTabs({ data, identifiers, token }: Props) {
     <Box>
       {data.partial ? <PartialBanner /> : null}
       <Tabs state={tabState}>
-        <TabList aria-label="Customer memory">
+        <TabList aria-label={s.tabsAriaLabel}>
           <Tab id="traits">
-            Traits
+            {s.tabTraits}
             <TabCount count={traitGroupCount} />
           </Tab>
           <Tab id="observations">
-            Observations
+            {s.tabObservations}
             <TabCount count={observationCount} />
           </Tab>
           <Tab id="summaries">
-            Summaries
+            {s.tabSummaries}
             <TabCount count={summaryCount} />
           </Tab>
-          <Tab id="search">Search</Tab>
+          <Tab id="search">{s.tabSearch}</Tab>
         </TabList>
         <TabPanels>
           <TabPanel>

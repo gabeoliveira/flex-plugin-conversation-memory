@@ -8,6 +8,7 @@ import { Stack } from '@twilio-paste/core/stack';
 import { Badge } from '@twilio-paste/core/badge';
 
 import { EmptyState } from './states';
+import { getStrings } from '../../i18n';
 import { formatTimestamp, formatConversationIds } from '../../utils/format';
 import type { MemoryObservation } from '../../api/fetchMemory';
 
@@ -18,7 +19,7 @@ interface Props {
 /** Observations as a list of cards, newest first, with source + timestamp. */
 export function ObservationsTab({ observations }: Props) {
   if (observations.length === 0) {
-    return <EmptyState message="No observations recorded for this customer." />;
+    return <EmptyState message={getStrings().noObservations} />;
   }
 
   const sorted = [...observations].sort(

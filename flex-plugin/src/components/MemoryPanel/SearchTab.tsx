@@ -20,6 +20,7 @@ import { captureTurn } from '../../api/captureTurn';
 import { friendlyError } from '../../api/errors';
 import { getAgentTraits } from '../../utils/flexToken';
 import { summarizeEnabled } from '../../config';
+import { getStrings } from '../../i18n';
 import type { IdentifierCandidate } from '../../utils/identifiers';
 
 /** Compact rendering of search results — the 'assistant' side of a captured search turn. */
@@ -56,6 +57,7 @@ export function SearchTab({ identifiers, profileId, token }: Props) {
     { kind: 'idle' } | { kind: 'loading' } | { kind: 'ok'; data: SummarizeResponse } | { kind: 'error'; message: string }
   >({ kind: 'idle' });
 
+  const s = getStrings();
   const memItems = memory.kind === 'ok' ? memory.items : [];
   const knowledgeItems = knowledge.kind === 'ok' ? knowledge.items : [];
   const hasResults = memItems.length > 0 || knowledgeItems.length > 0;
@@ -149,14 +151,14 @@ export function SearchTab({ identifiers, profileId, token }: Props) {
         }}
       >
         <Input
-          aria-label="Search customer memory and knowledge base"
+          aria-label={s.searchAriaLabel}
           type="text"
-          placeholder="Search memory and knowledge…"
+          placeholder={s.searchPlaceholder}
           value={term}
           onChange={(e) => setTerm(e.target.value)}
         />
         <Button variant="primary" type="submit" disabled={!term.trim()}>
-          Search
+          {s.searchButton}
         </Button>
       </Box>
 
@@ -166,7 +168,7 @@ export function SearchTab({ identifiers, profileId, token }: Props) {
             <SummaryBlock summary={summary} onSummarize={runSummarize} />
           ) : null}
 
-          <Section title="This customer" state={memory} empty="No matching memory for this customer.">
+          <Section title={s.sectionCustomer} state={memory} empty={s.noMatchingMemory}>
             {(item, i) => (
               <Card key={item.id} padding="space50">
                 <ResultMeta label={`M${i + 1}`} source={item.source} score={item.score} />
@@ -175,7 +177,7 @@ export function SearchTab({ identifiers, profileId, token }: Props) {
             )}
           </Section>
 
-          <Section title="Knowledge base" state={knowledge} empty="No matching knowledge.">
+          <Section title={s.sectionKnowledge} state={knowledge} empty={s.noMatchingKnowledge}>
             {(chunk, i) => (
               <Card key={i} padding="space50">
                 <ResultMeta label={`K${i + 1}`} score={chunk.score} />
@@ -185,7 +187,7 @@ export function SearchTab({ identifiers, profileId, token }: Props) {
           </Section>
         </Stack>
       ) : (
-        <EmptyState message="Search this customer's memory and your knowledge base." />
+        <EmptyState message={s.searchIdle} />
       )}
     </Box>
   );
@@ -193,6 +195,7 @@ export function SearchTab({ identifiers, profileId, token }: Props) {
 
 /** Citation label (M#/K#) + source badge + semantic-match % for a search result. */
 function ResultMeta({ label, source, score }: { label: string; source?: string; score?: number }) {
+  const s = getStrings();
   const hasScore = typeof score === 'number';
   return (
     <Box
@@ -214,7 +217,7 @@ function ResultMeta({ label, source, score }: { label: string; source?: string; 
       </Box>
       {hasScore ? (
         <Text as="span" fontSize="fontSize10" color="colorTextWeak">
-          {Math.round((score as number) * 100)}% match
+          {s.percentMatch(Math.round((score as number) * 100))}
         </Text>
       ) : null}
     </Box>
@@ -232,6 +235,7 @@ interface SummaryBlockProps {
 
 /** "Summarize" action + the grounded, cited AI answer above the raw results. */
 function SummaryBlock({ summary, onSummarize }: SummaryBlockProps) {
+  const s = getStrings();
   return (
     <Box>
       <Box marginBottom="space40">
@@ -241,14 +245,14 @@ function SummaryBlock({ summary, onSummarize }: SummaryBlockProps) {
           onClick={onSummarize}
           disabled={summary.kind === 'loading'}
         >
-          {summary.kind === 'loading' ? 'Summarizing…' : 'Summarize results'}
+          {summary.kind === 'loading' ? s.summarizing : s.summarize}
         </Button>
       </Box>
 
       {summary.kind === 'loading' ? (
         <Box display="flex" alignItems="center" columnGap="space30">
-          <Spinner decorative={false} title="Summarizing" />
-          <Text as="span">Summarizing the results…</Text>
+          <Spinner decorative={false} title={s.summarizing} />
+          <Text as="span">{s.summarizingSpinner}</Text>
         </Box>
       ) : summary.kind === 'error' ? (
         <Alert variant="error">
@@ -257,13 +261,13 @@ function SummaryBlock({ summary, onSummarize }: SummaryBlockProps) {
       ) : summary.kind === 'ok' ? (
         <Card padding="space60">
           <Heading as="h4" variant="heading40" marginBottom="space0">
-            Assistant summary
+            {s.assistantSummary}
           </Heading>
           <Box marginY="space30">
             <Paragraph marginBottom="space0">{summary.data.answer}</Paragraph>
           </Box>
           <Text as="div" fontSize="fontSize10" color="colorTextWeak">
-            AI-generated from the results below ([M#]/[K#]) — verify against the sources.
+            {s.summaryDisclaimer}
           </Text>
         </Card>
       ) : null}
@@ -279,6 +283,7 @@ interface SectionProps<T> {
 }
 
 function Section<T>({ title, state, empty, children }: SectionProps<T>) {
+  const s = getStrings();
   return (
     <Box>
       <Box marginBottom="space40">
@@ -288,8 +293,8 @@ function Section<T>({ title, state, empty, children }: SectionProps<T>) {
       </Box>
       {state.kind === 'loading' ? (
         <Box display="flex" alignItems="center" columnGap="space30">
-          <Spinner decorative={false} title={`Searching ${title}`} />
-          <Text as="span">Searching…</Text>
+          <Spinner decorative={false} title={`${s.searching} ${title}`} />
+          <Text as="span">{s.searching}</Text>
         </Box>
       ) : state.kind === 'error' ? (
         <Alert variant="error">

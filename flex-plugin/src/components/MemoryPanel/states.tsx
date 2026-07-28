@@ -6,12 +6,15 @@ import { Paragraph } from '@twilio-paste/core/paragraph';
 import { Spinner } from '@twilio-paste/core/spinner';
 import { Alert } from '@twilio-paste/core/alert';
 
+import { getStrings } from '../../i18n';
+
 /** Inline loading row shown while memory is being fetched. */
 export function LoadingState({ identifier }: { identifier: string }) {
+  const s = getStrings();
   return (
     <Box padding="space60" display="flex" alignItems="center" columnGap="space40">
-      <Spinner decorative={false} title="Loading customer memory" />
-      <Text as="span">Loading customer memory for {identifier}…</Text>
+      <Spinner decorative={false} title={s.loading} />
+      <Text as="span">{s.loadingFor(identifier)}</Text>
     </Box>
   );
 }
@@ -27,11 +30,12 @@ export function EmptyState({ message }: { message: string }) {
 
 /** Error state with the underlying message. */
 export function ErrorState({ identifier, message }: { identifier: string; message: string }) {
+  const s = getStrings();
   return (
     <Box padding="space60">
       <Alert variant="error">
         <Text as="span">
-          <strong>Failed to load customer memory for {identifier}.</strong> {message}
+          <strong>{s.errorTitle(identifier)}</strong> {message}
         </Text>
       </Alert>
     </Box>
@@ -40,10 +44,11 @@ export function ErrorState({ identifier, message }: { identifier: string; messag
 
 /** Soft warning banner shown when one upstream call failed but others worked. */
 export function PartialBanner() {
+  const s = getStrings();
   return (
     <Box marginBottom="space50">
       <Alert variant="warning">
-        <Text as="span">Some memory data could not be loaded. Showing what is available.</Text>
+        <Text as="span">{s.partial}</Text>
       </Alert>
     </Box>
   );
