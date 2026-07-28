@@ -223,38 +223,62 @@ only earns its keep if this becomes an SE-editable or conversational assistant.
 Where it plugs in: `summarize.js` (and optionally the search endpoints) fire the CO
 side-write after responding to the agent.
 
-## Phase 7 — Hardening & Improvements (roadmap)
+## Phase 7 — Hardening & GA Readiness
 
-### P1 — Security (do before wider rollout; the proxy returns customer PII)
+Scope confirmed: full P1–P4 + forward-compat, headed for **customer GA** (customers
+self-deploy). Connecting theme: **safe by default, configurable without a rebuild.**
 
-- **Flex Token Validator on all Function endpoints** (`get-memory`, and `search-knowledge` once Phase 5 lands) — the functions are currently open (the URL is the only secret). Validate the agent's Flex token server-side with [`twilio-flex-token-validator`](https://www.npmjs.com/package/twilio-flex-token-validator):
-  - Plugin sends the token (`Flex.Manager.getInstance().user.token`) with the request.
-  - Function rejects missing/invalid tokens with 401 before any Memora call. Simplest: wrap the handler in `require('twilio-flex-token-validator').functionValidator` (reads `event.Token`, uses the auto-injected `ACCOUNT_SID`/`AUTH_TOKEN`). For manual control, call `TokenValidator(token, sid, authToken)` and read the token from a header.
-  - **Token placement tradeoff:** `functionValidator` reads `event.Token` (query/body). To keep the token out of URLs/logs, switch `/get-memory` to **POST** (body) or do manual validation reading an `Authorization`/`Token` **header** (headers live in `event.request.headers`, not `event`). Update CORS allowed headers/methods accordingly.
-  - Replaces the old "shared-secret header" idea and is the real fix for the PII-exposure note.
-  - Add serverless tests for valid / invalid / missing token.
-- **Lock `ALLOWED_ORIGINS`** to the Flex domain (e.g. `https://flex.twilio.com`); drop `*`.
-- *(Optional)* **Role gating** — the validated token carries the worker identity/roles; gate memory access to specific roles if required.
+> Already shipped in Phases 1–6 (was listed here as future, now done): Flex-token
+> validation on **all** endpoints; the memory **Search** tab; the agent-productivity
+> capture; build-time `ENABLE_SUMMARIZE`/`ENABLE_CAPTURE` flags + graceful summarize.
 
-### P2 — Robustness
+### Release plan
+- **`@0.0.5` — Safe & robust:** Workstream A (security) → E1 (channelType) → B (robustness).
+- **`@0.1.0` — GA-ready:** D1–D3 (i18n + config-driven everything). The "reusable asset" milestone.
+- **`@0.1.x` — Polish:** C (cache, load-more) + D4 (comms tab).
 
-- **Request timeouts** on the serverless `fetch` calls (AbortController + a few seconds) so a slow/hung Memora call returns a clean error instead of spinning the panel.
-- **Multiple-profile handling** — `Lookup` can return several profileIds; today we take `[0]`. Decide: surface a "multiple matches" note, or merge; at minimum log it.
-- **Auth vs upstream error UX** — distinguish 401 ("session expired — reload Flex") from 502 ("memory service unavailable") in the panel.
+### Workstream A — Security *(do first; deployed with real exposure)*
+- **A1 Lock `ALLOWED_ORIGINS`** to the Flex domain(s); drop `*`. Comma-separated already
+  supported (`flex.twilio.com` + any custom domain). The per-function `applyCors` already
+  honors a locked value (a disallowed origin gets a non-matching header → browser blocks),
+  so this is an **env + docs** change, not code.
+- **A2** Add a **`/health`** endpoint that flags when a deployed env still has `*` (deploy
+  guard), plus a CORS test asserting a non-allowed origin is not echoed.
+- **A3** ✅ Role gating — config-gated, default off. All four endpoints read the validated
+  token's `roles`; when `REQUIRED_ROLE` is set, anyone lacking it gets 403 before any upstream
+  call. Unset = allow all authenticated agents (no behavior change).
 
-### P3 — Performance / UX
+### Workstream B — Robustness
+- **B1** `fetchWithTimeout` (AbortController) on **every** upstream call in all 4 functions
+  (~8s default, ~20s OpenAI) → clean 504 instead of a spinning panel.
+- **B2** Multi-profile: `get-memory` `Lookup` can return several; keep `[0]` but return
+  `profileCount`/`ambiguous`; panel shows a subtle "multiple profiles matched" note.
+- **B3** Error UX: api layer throws **typed** errors (status); panel distinguishes 401
+  ("session expired — reload Flex") from 5xx ("memory service unavailable — retry").
 
-- **Client-side cache** (short TTL, keyed by the identifier candidate list) so rapid task-switching doesn't re-hit Memora; **Refresh** bypasses it.
-- **"Load more"** for observations/summaries — Recall is capped at 10/5; fetch higher limits on demand.
-- **Memory search** — Recall accepts a `query` param; add a search box for agents to semantically query the customer's memory.
+### Workstream C — Perf / UX
+- **C1** Client-side cache (short TTL, keyed by the identifier candidate list + trait groups);
+  a **Refresh** control bypasses it. Kills re-fetch on rapid task-switching.
+- **C2** "Load more" for observations/summaries beyond Recall's 10/5 (limits already camelCase).
 
-### P4 — Product / reusability
+### Workstream D — Reusability / GA *(config-driven is the theme)*
+- **D1 i18n** — externalize all strings into `strings/{locale}.ts` + a `t()` helper; ship
+  `en` + `pt-BR` (repo already runs pt-BR demos). Locale from config.
+- **D2** Configurable **trait-group display** (order / labels / visibility) via config.
+- **D3 Runtime config** — promote the build-time flags + `CRM_MODE` + locale + trait config
+  to read from Flex `ui_attributes` so customers configure **without a rebuild**; build-time
+  stays the fallback.
+- **D4** *(opt-in)* `communications` tab — recent cross-channel messages behind a flag, PII-aware.
 
-- **Externalize UI strings (i18n)** — strings are hardcoded English; the repo ships non-English (pt-BR) demos, so a reusable asset should use a strings map / Flex localization.
-- **Optional `communications` tab** — a 4th tab for recent cross-channel messages (dropped earlier for PII/size); make it opt-in.
-- **Configurable trait-group display** — order / labels / visibility of trait groups via config.
+### Workstream E — Forward-compat / ops
+- **E1** `channelType` → `conversationType` via `ConversationHelper` (not 1:1; keep
+  `channelType` as fallback). Silences the deploy validator; update `identifiers.ts` tests.
+- **E2** Verify attribute-key lists + channel map against **real handoff tasks**
+  (`identifiers.ts` is the single tuning point).
+- **E3** GA docs: CIRL webhook wiring (operator displayName already stable), custom Flex
+  domain, `appConfig` accountSid, per-customer build/release checklist.
 
-### Forward-compat / ops
-
-- **`channelType` → `conversationType`** — silences the deploy validator and guards against Flex deprecation. Not a 1:1 swap (`ConversationHelper.conversationType` ≠ raw channel); verify semantics in `identifiers.ts` before switching.
-- **Attribute keys / channel map** — verify against real handoff tasks; the key lists + channel map in `identifiers.ts` are the single place to adjust.
+### Open decisions
+- i18n locales (`en` + `pt-BR` only?) and locale source (Flex UI locale vs explicit config).
+- Custom Flex domain for A1 (`flex.twilio.com` vs branded).
+- Config transport for D3 — Flex `ui_attributes` (recommended for GA) vs build-time only.
