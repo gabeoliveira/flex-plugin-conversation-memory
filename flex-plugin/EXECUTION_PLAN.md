@@ -152,13 +152,40 @@ token never in a URL.
 - `KNOWLEDGE_BASE_ID` (KB exists with indexed content — confirmed). List KBs to grab the id:
   `GET https://memory.twilio.com/v1/ControlPlane/KnowledgeBases`.
 
-## Phase 6 — Agent Productivity analytics (CO + CI + CIRL) — fast follow
+## Phase 6 — Agent Productivity analytics (CO + CI) — ✅ built
 
 An **observability side-channel** on top of the assist: capture how agents use the
-assistant, run Conversation Intelligence on it, and report via CIRL. Distinct from the
-assist itself — it's a fire-and-forget side-write that never touches the agent UX or
-latency. The `summarize` turn already emits the shape this needs:
-`{ agentId, query, retrievedSources[], answer, timestamp }` — design once, use twice.
+assistant, run Conversation Intelligence on it, report via CIRL (black box).
+
+**What shipped:**
+- **`infra/agent-productivity/`** — provisioning scripts (`npm run create:all`): dedicated
+  Memory Store, Custom GenAI operator "Agent Assist Session Insights", Intelligence config
+  (webhook → CIRL), agent CO config (`GROUP_BY_PROFILE`, CHAT `closed` timeout = session boundary,
+  `conversationsV1Bridge` off, `memoryExtractionEnabled`) — plus the operator spec doc. **No Sync.**
+- **`serverless/functions/capture-turn.js`** — token-validated; **CO-native session model, no Sync**:
+  the agent is a **`CUSTOMER`** participant (CHAT address = Worker SID), so `GROUP_BY_PROFILE` enforces
+  one open conversation per agent profile. capture-turn POSTs a conversation with the agent (CUSTOMER)
+  + assistant (AI_AGENT) inline; on **201** it's a new session (participant ids inline), on **409** CO
+  hands back the open conversation's id in the error (`"Address mapping already exists on conversation
+  conv_conversation_…"`) → fetch its participants and insert there. Each turn = two threaded
+  communications (CUSTOMER query + AI_AGENT answer, top-level `channelId` = Worker SID). **Never
+  closes** — the CO idle timeout fires `CONVERSATION_END` → one CI run per session. Race guard: an
+  insert failure (reused conv closed mid-turn) retries once; the freed mapping makes the next POST 201 a
+  fresh session. `ensureAgentProfile` still lookup-or-creates the agent profile by the custom `workerSid`
+  idType for enrichment (email/name/team) + identifiers.
+- **Plugin** — `api/captureTurn.ts` (browser fire-and-forget, `keepalive`, errors swallowed) fired from
+  `SearchTab` on **every search** (compact results) and **every summarize** (the answer);
+  `getAgentTraits()` sends display enrichment.
+- **Tests:** +10 (9 serverless capture-turn + 1 plugin) → 65 total, all green.
+
+**Identity finding:** Memora's *default* idTypes are `chat, email, phone, pushUserID, whatsapp`, but
+**custom idTypes are supported** via the store's **Identity Resolution Settings** (`PUT
+/IdentityResolutionSettings`; `normalization: 'trim'` keeps a raw `WK…` intact). The agent is keyed by
+a custom **`workerSid`** identifier: `create-agent-memory-store.ts` registers it and promotes an
+`Agent.workerSid` trait to it (plus an `Agent.chatId` trait → the built-in `chat` idType, same value,
+so the CHAT participant resolves to the same profile). `capture-turn` lookup-or-creates that profile.
+
+Original design context (still accurate):
 
 **Why this is *not* TAC or Langflow:** TAC is a channel bridge (voice/WhatsApp/SMS + CO
 lifecycle); there is no channel here — a human agent queries a UI. So TAC is a mismatch,
@@ -173,9 +200,12 @@ only earns its keep if this becomes an SE-editable or conversational assistant.
   push turns in via the Conversations API (`createConversation` + `POST /Communications`,
   the `insertCommunication` pattern), tagged channel `API`/`SYSTEM`/`CHAT`. Set that
   expectation — it's push-based injection, not capture rules.
-- **Inversion — the agent is the "customer":** model the human as `HUMAN_AGENT` and the
-  assistant as `AI_AGENT`, key the profile on **agent identity** → per-agent productivity
-  profiles ("what does this agent lean on the assistant for; who's adopted it").
+- **Inversion — the agent IS the "customer":** model the human as a **`CUSTOMER`** participant
+  (not `HUMAN_AGENT`) and the assistant as `AI_AGENT`, key the profile on **agent identity** →
+  per-agent productivity profiles ("what does this agent lean on the assistant for; who's adopted
+  it"). This inversion is load-bearing: only `CUSTOMER` participants resolve to a profile, so it's
+  what makes `GROUP_BY_PROFILE` group an agent's turns into one session (and enables the 409-based
+  find-or-create that replaced Sync).
 - **Custom CI operators** (GenAI): question topic, "answerable from memory/KB?",
   knowledge-gap detection, assistant-helpfulness score. They run **async** on conversation
   close/inactive → near-real-time, not instant.
