@@ -58,8 +58,16 @@ exports.handler = async function (context, event, callback) {
 
   const apiKey = context.OPENAI_API_KEY;
   if (!apiKey) {
-    response.setStatusCode(500);
-    response.setBody({ error: 'server is missing OPENAI_API_KEY' });
+    // Summarize is optional. With no key configured, degrade gracefully (200,
+    // disabled) instead of erroring — the plugin normally hides the button via
+    // FLEX_APP_ENABLE_SUMMARIZE, but a stale build shouldn't surface a 500.
+    response.setStatusCode(200);
+    response.setBody({
+      answer: 'Summarize is disabled (no OpenAI key configured).',
+      model: null,
+      grounded: false,
+      disabled: true,
+    });
     return callback(null, response);
   }
   const model = context.OPENAI_MODEL || 'gpt-4o-mini';

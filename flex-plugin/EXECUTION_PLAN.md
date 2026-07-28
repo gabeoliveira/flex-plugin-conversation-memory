@@ -176,7 +176,12 @@ assistant, run Conversation Intelligence on it, report via CIRL (black box).
 - **Plugin** — `api/captureTurn.ts` (browser fire-and-forget, `keepalive`, errors swallowed) fired from
   `SearchTab` on **every search** (compact results) and **every summarize** (the answer);
   `getAgentTraits()` sends display enrichment.
-- **Tests:** +10 (9 serverless capture-turn + 1 plugin) → 65 total, all green.
+- **Tests:** +10 (9 serverless capture-turn + 1 plugin) → 65, then **+9 for the feature flags**
+  (4 `config` + 4 `captureTurn` + 1 SearchTab hidden-button) → **74 total, all green.**
+- **Optionality (build-time flags):** `FLEX_APP_ENABLE_SUMMARIZE=false` hides the OpenAI Summarize
+  button (panel = memory + knowledge + search, no OpenAI dependency); `FLEX_APP_ENABLE_CAPTURE=false`
+  turns off Phase 6 capture. `summarize.js` also degrades to `200 {disabled:true}` when
+  `OPENAI_API_KEY` is unset (see [`src/config.ts`](src/config.ts)). Shipped in `@0.0.4`.
 
 **Identity finding:** Memora's *default* idTypes are `chat, email, phone, pushUserID, whatsapp`, but
 **custom idTypes are supported** via the store's **Identity Resolution Settings** (`PUT

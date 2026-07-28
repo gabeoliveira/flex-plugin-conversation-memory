@@ -18,6 +18,7 @@ import { searchKnowledge, type KnowledgeChunk } from '../../api/searchKnowledge'
 import { summarize, type SummarizeResponse } from '../../api/summarize';
 import { captureTurn } from '../../api/captureTurn';
 import { getAgentTraits } from '../../utils/flexToken';
+import { summarizeEnabled } from '../../config';
 import type { IdentifierCandidate } from '../../utils/identifiers';
 
 /** Compact rendering of search results — the 'assistant' side of a captured search turn. */
@@ -57,6 +58,7 @@ export function SearchTab({ identifiers, profileId, token }: Props) {
   const memItems = memory.kind === 'ok' ? memory.items : [];
   const knowledgeItems = knowledge.kind === 'ok' ? knowledge.items : [];
   const hasResults = memItems.length > 0 || knowledgeItems.length > 0;
+  const showSummarize = summarizeEnabled();
 
   const runSearch = () => {
     const query = term.trim();
@@ -161,7 +163,9 @@ export function SearchTab({ identifiers, profileId, token }: Props) {
 
       {submitted ? (
         <Stack orientation="vertical" spacing="space70">
-          {hasResults ? <SummaryBlock summary={summary} onSummarize={runSummarize} /> : null}
+          {showSummarize && hasResults ? (
+            <SummaryBlock summary={summary} onSummarize={runSummarize} />
+          ) : null}
 
           <Section title="This customer" state={memory} empty="No matching memory for this customer.">
             {(item, i) => (

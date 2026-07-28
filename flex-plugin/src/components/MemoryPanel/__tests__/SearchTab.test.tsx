@@ -41,6 +41,7 @@ beforeEach(() => {
   mockSearchKnowledge.mockReset();
   mockSummarize.mockReset();
   mockCaptureTurn.mockReset();
+  delete process.env.FLEX_APP_ENABLE_SUMMARIZE; // default ON unless a test opts out
 });
 
 describe('SearchTab', () => {
@@ -154,6 +155,31 @@ describe('SearchTab', () => {
       expect(mockCaptureTurn).toHaveBeenCalledWith(
         expect.objectContaining({ kind: 'summarize', query: 'refund', answer: 'Refunds are 30 days [K1].' }),
       ),
+    );
+  });
+
+  it('hides the Summarize button when FLEX_APP_ENABLE_SUMMARIZE is off', async () => {
+    process.env.FLEX_APP_ENABLE_SUMMARIZE = 'false';
+    mockFetchMemory.mockResolvedValue({
+      identifier: '+55',
+      matchedBy: 'phone',
+      profileId: 'mem_profile_1',
+      profileCreatedAt: null,
+      traits: {},
+      observations: [{ id: 'o1', content: 'Prefers mornings', createdAt: 't' }],
+      summaries: [],
+    });
+    mockSearchKnowledge.mockResolvedValue({ query: 'refund', chunks: [{ content: 'Refunds 30 days' }] });
+
+    renderSearch();
+    submit('refund');
+    await screen.findByText('Prefers mornings'); // results rendered…
+
+    // …but no Summarize action (OpenAI disabled at build)
+    expect(screen.queryByRole('button', { name: 'Summarize results' })).not.toBeInTheDocument();
+    // search capture still fires — it has no OpenAI dependency
+    await waitFor(() =>
+      expect(mockCaptureTurn).toHaveBeenCalledWith(expect.objectContaining({ kind: 'search' })),
     );
   });
 
