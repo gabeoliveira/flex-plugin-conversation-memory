@@ -7,17 +7,20 @@ import { Paragraph } from '@twilio-paste/core/paragraph';
 import { Stack } from '@twilio-paste/core/stack';
 import { Badge } from '@twilio-paste/core/badge';
 
-import { EmptyState } from './states';
+import { EmptyState, LoadMoreButton } from './states';
 import { getStrings } from '../../i18n';
 import { formatTimestamp, formatConversationIds } from '../../utils/format';
 import type { MemorySummary } from '../../api/fetchMemory';
 
 interface Props {
   summaries: MemorySummary[];
+  /** Present when more can be loaded (C2). */
+  onLoadMore?: () => void;
+  loadingMore?: boolean;
 }
 
 /** Conversation summaries as a list of cards, newest first. */
-export function SummariesTab({ summaries }: Props) {
+export function SummariesTab({ summaries, onLoadMore, loadingMore }: Props) {
   if (summaries.length === 0) {
     return <EmptyState message={getStrings().noSummaries} />;
   }
@@ -62,6 +65,7 @@ export function SummariesTab({ summaries }: Props) {
           );
         })}
       </Stack>
+      {onLoadMore ? <LoadMoreButton onClick={onLoadMore} loading={loadingMore} /> : null}
     </Box>
   );
 }

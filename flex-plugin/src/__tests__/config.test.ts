@@ -2,7 +2,7 @@
 // runtime-override layer directly (and avoid loading the Flex bundle under jsdom).
 jest.mock('../runtimeConfig', () => ({ getRuntimeConfig: jest.fn(() => ({})) }));
 
-import { flag, summarizeEnabled, captureEnabled } from '../config';
+import { flag, summarizeEnabled, captureEnabled, communicationsEnabled } from '../config';
 import { getRuntimeConfig } from '../runtimeConfig';
 
 const mockRuntime = getRuntimeConfig as jest.MockedFunction<typeof getRuntimeConfig>;
@@ -65,5 +65,18 @@ describe('feature flags', () => {
     delete process.env.FLEX_APP_ENABLE_SUMMARIZE;
     mockRuntime.mockReturnValue({}); // no runtime override
     expect(summarizeEnabled()).toBe(true); // env default ON
+  });
+
+  it('communicationsEnabled defaults OFF and is opt-in via env or runtime', () => {
+    delete process.env.FLEX_APP_ENABLE_COMMUNICATIONS;
+    mockRuntime.mockReturnValue({});
+    expect(communicationsEnabled()).toBe(false); // off by default
+
+    process.env.FLEX_APP_ENABLE_COMMUNICATIONS = 'true';
+    expect(communicationsEnabled()).toBe(true); // env opt-in
+
+    delete process.env.FLEX_APP_ENABLE_COMMUNICATIONS;
+    mockRuntime.mockReturnValue({ enableCommunications: true });
+    expect(communicationsEnabled()).toBe(true); // runtime opt-in
   });
 });

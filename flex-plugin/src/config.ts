@@ -30,3 +30,9 @@ export function captureEnabled(): boolean {
   const rc = getRuntimeConfig().enableCapture;
   return typeof rc === 'boolean' ? rc : flag('FLEX_APP_ENABLE_CAPTURE');
 }
+
+/** Whether the opt-in Communications tab is shown (D4). Default OFF. */
+export function communicationsEnabled(): boolean {
+  const rc = getRuntimeConfig().enableCommunications;
+  return typeof rc === 'boolean' ? rc : flag('FLEX_APP_ENABLE_COMMUNICATIONS', false);
+}

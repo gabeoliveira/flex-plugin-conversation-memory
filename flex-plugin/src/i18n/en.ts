@@ -18,10 +18,13 @@ export const en: Strings = {
   tabObservations: 'Observations',
   tabSummaries: 'Summaries',
   tabSearch: 'Search',
+  tabCommunications: 'Messages',
+  loadMore: 'Load more',
 
   noTraits: 'No traits recorded for this customer.',
   noObservations: 'No observations recorded for this customer.',
   noSummaries: 'No summaries recorded for this customer.',
+  noCommunications: 'No recent messages for this customer.',
 
   searchAriaLabel: 'Search customer memory and knowledge base',
   searchPlaceholder: 'Search memory and knowledge…',

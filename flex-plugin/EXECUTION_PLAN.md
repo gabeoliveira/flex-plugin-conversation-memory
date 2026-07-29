@@ -257,10 +257,12 @@ self-deploy). Connecting theme: **safe by default, configurable without a rebuil
   maps 401 → "session expired, reload Flex", 5xx (incl. 504) → "service unavailable, try again",
   AbortError → "" (ignored). Wired into `MemoryPanel` + `SearchTab`.
 
-### Workstream C — Perf / UX
-- **C1** Client-side cache (short TTL, keyed by the identifier candidate list + trait groups);
-  a **Refresh** control bypasses it. Kills re-fetch on rapid task-switching.
-- **C2** "Load more" for observations/summaries beyond Recall's 10/5 (limits already camelCase).
+### Workstream C — Perf / UX ✅ (shipped `@0.1.1`)
+- **C1** ✅ Client-side cache (`api/memoryCache.ts`, 60s TTL, keyed by identifiers + limits);
+  **Refresh** invalidates the key. Kills re-fetch on rapid task-switching.
+- **C2** ✅ "Load more" for observations/summaries — `get-memory` takes clamped `observationsLimit`
+  /`summariesLimit`; the panel raises them via a background refetch that keeps the current data +
+  tab on screen (no full reload), so you don't lose your place.
 
 ### Workstream D — Reusability / GA *(config-driven is the theme)*
 - **D1 i18n** ✅ (shipped `@0.0.7`). All user-facing strings live in `src/i18n/{en,pt-BR}.ts`
@@ -274,7 +276,10 @@ self-deploy). Connecting theme: **safe by default, configurable without a rebuil
   .ui_attributes`, memoized). Feature flags (`config.ts`) and locale (`i18n`) now layer
   **runtime over build-time env**, so customers reconfigure locale / flags / trait display
   **without a rebuild**. (`CRM_MODE` left build-time — it's a structural placement choice.)
-- **D4** *(opt-in)* `communications` tab — recent cross-channel messages behind a flag, PII-aware.
+- **D4** ✅ *(opt-in)* Communications ("Messages") tab — recent cross-channel messages, behind
+  `enableCommunications` (**off by default**, runtime or `FLEX_APP_ENABLE_COMMUNICATIONS`).
+  `get-memory` surfaces Recall `communications` only when `communicationsLimit` is passed, so
+  there's no extra latency/PII when the tab is off. Shipped `@0.1.1`.
 
 ### Workstream E — Forward-compat / ops
 - **E1** ✅ `channelType` → `conversationType`. `MemoryPanel` derives the channel from

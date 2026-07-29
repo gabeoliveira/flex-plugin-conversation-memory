@@ -19,11 +19,14 @@ export interface Strings {
   tabObservations: string;
   tabSummaries: string;
   tabSearch: string;
+  tabCommunications: string;
+  loadMore: string;
 
   // empty states
   noTraits: string;
   noObservations: string;
   noSummaries: string;
+  noCommunications: string;
 
   // search + summarize
   searchAriaLabel: string;

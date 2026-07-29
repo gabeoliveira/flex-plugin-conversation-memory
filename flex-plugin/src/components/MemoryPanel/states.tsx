@@ -5,6 +5,7 @@ import { Text } from '@twilio-paste/core/text';
 import { Paragraph } from '@twilio-paste/core/paragraph';
 import { Spinner } from '@twilio-paste/core/spinner';
 import { Alert } from '@twilio-paste/core/alert';
+import { Button } from '@twilio-paste/core/button';
 
 import { getStrings } from '../../i18n';
 
@@ -38,6 +39,18 @@ export function ErrorState({ identifier, message }: { identifier: string; messag
           <strong>{s.errorTitle(identifier)}</strong> {message}
         </Text>
       </Alert>
+    </Box>
+  );
+}
+
+/** Centered "Load more" action (C2), shown under a capped list. */
+export function LoadMoreButton({ onClick, loading }: { onClick: () => void; loading?: boolean }) {
+  const s = getStrings();
+  return (
+    <Box marginTop="space50" display="flex" justifyContent="center">
+      <Button variant="link" onClick={onClick} loading={loading}>
+        {s.loadMore}
+      </Button>
     </Box>
   );
 }

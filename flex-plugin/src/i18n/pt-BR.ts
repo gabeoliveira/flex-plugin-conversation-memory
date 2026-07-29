@@ -18,10 +18,13 @@ export const ptBR: Strings = {
   tabObservations: 'Observações',
   tabSummaries: 'Resumos',
   tabSearch: 'Buscar',
+  tabCommunications: 'Mensagens',
+  loadMore: 'Carregar mais',
 
   noTraits: 'Nenhum atributo registrado para este cliente.',
   noObservations: 'Nenhuma observação registrada para este cliente.',
   noSummaries: 'Nenhum resumo registrado para este cliente.',
+  noCommunications: 'Nenhuma mensagem recente para este cliente.',
 
   searchAriaLabel: 'Buscar na memória do cliente e na base de conhecimento',
   searchPlaceholder: 'Buscar na memória e no conhecimento…',

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as Flex from '@twilio/flex-ui';
 import { withTaskContext } from '@twilio/flex-ui';
 
@@ -9,10 +9,16 @@ import { Button } from '@twilio-paste/core/button';
 import { buildIdentifierCandidates, describeIdentifier } from '../../utils/identifiers';
 import { getFlexToken } from '../../utils/flexToken';
 import { fetchMemory, type MemoryResponse } from '../../api/fetchMemory';
+import { getCachedMemory, setCachedMemory, invalidateMemory, memoryCacheKey } from '../../api/memoryCache';
 import { friendlyError } from '../../api/errors';
 import { getStrings } from '../../i18n';
+import { communicationsEnabled } from '../../config';
 import { MemoryTabs } from './MemoryTabs';
 import { LoadingState, EmptyState, ErrorState } from './states';
+
+const OBS_DEFAULT = 10;
+const SUM_DEFAULT = 5;
+const LIMIT_MAX = 20; // Recall's ceiling
 
 interface Props {
   task?: Flex.ITask;
@@ -51,24 +57,59 @@ function MemoryPanelImpl({ task }: Props) {
 
   const [state, setState] = useState<PanelState>({ kind: 'idle' });
   const [reloadNonce, setReloadNonce] = useState(0);
+  const [obsLimit, setObsLimit] = useState(OBS_DEFAULT);
+  const [sumLimit, setSumLimit] = useState(SUM_DEFAULT);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const cacheKey = memoryCacheKey(candidatesKey, obsLimit, sumLimit);
+  const loadKey = `${candidatesKey}|${reloadNonce}`;
+  const prevLoadKey = useRef('');
 
   useEffect(() => {
     if (candidates.length === 0) {
       setState({ kind: 'idle' });
       return;
     }
+    // A change in candidates/refresh is a full (re)load; a change only in limits
+    // is a background "load more" that keeps the current data + tab on screen.
+    const limitOnly = prevLoadKey.current === loadKey;
+    prevLoadKey.current = loadKey;
+
+    const cached = getCachedMemory(cacheKey);
+    if (cached) {
+      setState({ kind: 'ok', data: cached });
+      setLoadingMore(false);
+      return;
+    }
+
     const controller = new AbortController();
-    setState({ kind: 'loading' });
-    fetchMemory({ identifiers: candidates, token }, controller.signal)
-      .then((data) => setState({ kind: 'ok', data }))
+    if (limitOnly) setLoadingMore(true);
+    else setState({ kind: 'loading' });
+
+    fetchMemory(
+      {
+        identifiers: candidates,
+        token,
+        observationsLimit: obsLimit,
+        summariesLimit: sumLimit,
+        communicationsLimit: communicationsEnabled() ? 10 : undefined,
+      },
+      controller.signal,
+    )
+      .then((data) => {
+        setCachedMemory(cacheKey, data);
+        setState({ kind: 'ok', data });
+        setLoadingMore(false);
+      })
       .catch((err) => {
         if (controller.signal.aborted) return;
-        setState({ kind: 'error', message: friendlyError(err) });
+        setLoadingMore(false);
+        if (!limitOnly) setState({ kind: 'error', message: friendlyError(err) });
       });
     return () => controller.abort();
-    // reloadNonce intentionally retriggers a fresh fetch on manual refresh.
+    // reloadNonce retriggers a fresh fetch on manual refresh; limits drive "load more".
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [candidatesKey, reloadNonce]);
+  }, [candidatesKey, reloadNonce, obsLimit, sumLimit]);
 
   if (candidates.length === 0) {
     return <EmptyState message={s.noIdentifier} />;
@@ -94,7 +135,10 @@ function MemoryPanelImpl({ task }: Props) {
         <Button
           variant="secondary"
           size="small"
-          onClick={() => setReloadNonce((n) => n + 1)}
+          onClick={() => {
+            invalidateMemory(cacheKey); // Refresh bypasses the cache
+            setReloadNonce((n) => n + 1);
+          }}
           disabled={state.kind === 'loading'}
         >
           {s.refresh}
@@ -114,7 +158,22 @@ function MemoryPanelImpl({ task }: Props) {
               </Text>
             </Box>
           ) : null}
-          <MemoryTabs data={state.data} identifiers={candidates} token={token} />
+          <MemoryTabs
+            data={state.data}
+            identifiers={candidates}
+            token={token}
+            loadingMore={loadingMore}
+            onLoadMoreObservations={
+              obsLimit < LIMIT_MAX && state.data.observations.length >= obsLimit
+                ? () => setObsLimit(LIMIT_MAX)
+                : undefined
+            }
+            onLoadMoreSummaries={
+              sumLimit < LIMIT_MAX && state.data.summaries.length >= sumLimit
+                ? () => setSumLimit(LIMIT_MAX)
+                : undefined
+            }
+          />
         </>
       )}
     </Box>

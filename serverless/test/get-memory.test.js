@@ -115,6 +115,34 @@ describe('get-memory — robustness (B1 timeout / B2 multi-profile)', () => {
     expect(res.statusCode).toBe(504);
   });
 
+  it('forwards clamped observation/summary limits to Recall (C2 "load more")', async () => {
+    setupFetch({
+      lookups: { phone: makeRes({ profiles: ['p1'] }) },
+      recall: makeRes({ observations: [], summaries: [] }),
+      profile: makeRes({ id: 'p1', createdAt: 't', traits: {} }),
+    });
+    await invoke({ ...ids([PHONE]), observationsLimit: '50', summariesLimit: '2' });
+    // 50 clamps to Recall's max of 20; 2 passes through.
+    expect(recallBodies()[0]).toMatchObject({ observationsLimit: 20, summariesLimit: 2 });
+  });
+
+  it('communications are opt-in (D4): requested + returned only with communicationsLimit', async () => {
+    setupFetch({
+      lookups: { phone: makeRes({ profiles: ['p1'] }) },
+      recall: makeRes({ observations: [], summaries: [], communications: [{ id: 'm1', content: 'hi' }] }),
+      profile: makeRes({ id: 'p1', createdAt: 't', traits: {} }),
+    });
+    // without the param: not requested, and the field is an empty array
+    const off = await invoke(ids([PHONE]));
+    expect(recallBodies()[0].communicationsLimit).toBeUndefined();
+    expect(off.body.communications).toEqual([]);
+
+    // with the param: requested (clamped) and surfaced
+    const on = await invoke({ ...ids([PHONE]), communicationsLimit: '10' });
+    expect(recallBodies()[1].communicationsLimit).toBe(10);
+    expect(on.body.communications).toHaveLength(1);
+  });
+
   it('flags ambiguous + reports the count when a lookup resolves to multiple profiles', async () => {
     setupFetch({
       lookups: { phone: makeRes({ profiles: ['p1', 'p2'] }) },

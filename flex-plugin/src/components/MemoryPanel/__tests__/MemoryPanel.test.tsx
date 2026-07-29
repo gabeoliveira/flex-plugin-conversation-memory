@@ -26,6 +26,7 @@ jest.mock('../../../api/fetchMemory', () => ({
 import { MemoryPanel } from '../MemoryPanel';
 import { fetchMemory } from '../../../api/fetchMemory';
 import { ApiError } from '../../../api/errors';
+import { __clearMemoryCache } from '../../../api/memoryCache';
 
 const mockFetchMemory = fetchMemory as jest.MockedFunction<typeof fetchMemory>;
 
@@ -53,6 +54,7 @@ const SAMPLE = {
 
 beforeEach(() => {
   mockFetchMemory.mockReset();
+  __clearMemoryCache(); // module-level cache would otherwise leak across tests
 });
 
 describe('MemoryPanel', () => {
@@ -69,7 +71,10 @@ describe('MemoryPanel', () => {
     const tabs = await screen.findByTestId('memory-tabs');
     expect(tabs).toHaveTextContent('observations:1');
     expect(mockFetchMemory).toHaveBeenCalledWith(
-      { identifiers: [{ idType: 'phone', value: '+5511976932682' }], token: 'test-token' },
+      expect.objectContaining({
+        identifiers: [{ idType: 'phone', value: '+5511976932682' }],
+        token: 'test-token',
+      }),
       expect.anything(),
     );
   });
@@ -80,13 +85,13 @@ describe('MemoryPanel', () => {
 
     await screen.findByTestId('memory-tabs');
     expect(mockFetchMemory).toHaveBeenCalledWith(
-      {
+      expect.objectContaining({
         identifiers: [
           { idType: 'whatsapp', value: 'whatsapp:+5511976932682' },
           { idType: 'phone', value: '+5511976932682' },
         ],
         token: 'test-token',
-      },
+      }),
       expect.anything(),
     );
   });

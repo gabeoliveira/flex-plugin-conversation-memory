@@ -112,11 +112,17 @@ exports.handler = async function (context, event, callback) {
     // relevance but still returns up to the limit — a high limit = "everything").
     // NOTE: Recall honors ONLY camelCase limit params; snake_case is silently
     // ignored and it returns its (large) default set.
+    // Panel view honors optional limit params (Workstream C2 "Load more"),
+    // clamped to Recall's max. Search mode keeps its fixed top-N.
     const recallBody = {
-      observationsLimit: query ? 5 : 10,
-      summariesLimit: query ? 3 : 5,
+      observationsLimit: query ? 5 : clampLimit(event.observationsLimit, 10),
+      summariesLimit: query ? 3 : clampLimit(event.summariesLimit, 5),
     };
     if (query) recallBody.query = query;
+    // Communications are opt-in (D4): only request them when the client asks
+    // (panel view only) — avoids extra latency + PII when the tab is disabled.
+    const commLimit = query ? 0 : event.communicationsLimit ? clampLimit(event.communicationsLimit, 10) : 0;
+    if (commLimit > 0) recallBody.communicationsLimit = commLimit;
 
     const recall = await getJson(`${storeBase}/Profiles/${profileId}/Recall`, {
       method: 'POST',
@@ -168,6 +174,10 @@ exports.handler = async function (context, event, callback) {
       traits,
       observations: !recallFailed && Array.isArray(recall.observations) ? recall.observations : [],
       summaries: !recallFailed && Array.isArray(recall.summaries) ? recall.summaries : [],
+      communications:
+        commLimit > 0 && !recallFailed && Array.isArray(recall.communications)
+          ? recall.communications
+          : [],
       partial: Boolean(recallFailed || profileError),
     });
     return callback(null, response);
@@ -191,6 +201,7 @@ function emptyPayload(identifier) {
     traits: {},
     observations: [],
     summaries: [],
+    communications: [],
   };
 }
 
@@ -288,6 +299,13 @@ async function getJson(url, options) {
 /** Map an upstream failure to a gateway status: 504 for our timeouts, else 502. */
 function upstreamStatus(err) {
   return err && err.status === 504 ? 504 : 502;
+}
+
+/** Parse a Recall limit param, clamped to [1, 20] (Recall's max); default when absent/invalid. */
+function clampLimit(raw, def) {
+  const n = parseInt(raw, 10);
+  if (Number.isNaN(n)) return def;
+  return Math.max(1, Math.min(20, n));
 }
 
 function errString(err) {

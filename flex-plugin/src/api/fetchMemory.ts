@@ -33,6 +33,20 @@ export interface MemorySummary {
   score?: number;
 }
 
+/** A recalled cross-channel communication (D4 — opt-in). Shape is permissive
+ *  since Recall's fields vary; the tab renders defensively. */
+export interface MemoryCommunication {
+  id: string;
+  content: string;
+  author?: string;
+  role?: string;
+  channel?: string;
+  createdAt?: string;
+  occurredAt?: string;
+  source?: string;
+  conversationIds?: string[];
+}
+
 export interface MemoryResponse {
   /** Echo of the identifier value the server resolved the profile with. */
   identifier: string;
@@ -45,6 +59,8 @@ export interface MemoryResponse {
   traits: Record<string, Record<string, unknown>>;
   observations: MemoryObservation[];
   summaries: MemorySummary[];
+  /** Recalled cross-channel messages — populated only when requested (D4 opt-in). */
+  communications?: MemoryCommunication[];
   /** How many profiles the matching identifier resolved to (0 when none matched). */
   profileCount?: number;
   /** True when the identifier resolved to more than one profile (first is used). */
@@ -60,6 +76,11 @@ export interface FetchMemoryParams {
   profileId?: string | null;
   /** Semantic search query; omit for the chronological panel view. */
   query?: string;
+  /** Panel-view Recall limits (clamped to 20 server-side); default 10 / 5. "Load more" raises these. */
+  observationsLimit?: number;
+  summariesLimit?: number;
+  /** Request N recent communications (D4); omit/0 = don't fetch them. */
+  communicationsLimit?: number;
   /** Agent Flex token, sent as Authorization: Bearer for server-side validation. */
   token: string;
 }
@@ -82,6 +103,9 @@ export async function fetchMemory(
   if (params.identifiers) query.set('identifiers', JSON.stringify(params.identifiers));
   if (params.profileId) query.set('profileId', params.profileId);
   if (params.query) query.set('query', params.query);
+  if (params.observationsLimit) query.set('observationsLimit', String(params.observationsLimit));
+  if (params.summariesLimit) query.set('summariesLimit', String(params.summariesLimit));
+  if (params.communicationsLimit) query.set('communicationsLimit', String(params.communicationsLimit));
 
   const res = await fetch(`${endpoint}?${query.toString()}`, {
     signal,

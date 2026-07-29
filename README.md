@@ -111,6 +111,7 @@ Locale, the two feature flags, and the trait-group display can all be set at **r
     "locale": "pt-BR",                              // else follows Flex's UI locale
     "enableSummarize": false,                        // hide the OpenAI Summarize button
     "enableCapture": true,
+    "enableCommunications": true,                    // show the opt-in Messages tab (default off)
     "traitGroups": {
       "order":  ["Contact", "DasaClient"],           // display order (unlisted follow)
       "hidden": ["Internal"],                        // groups to hide
@@ -125,7 +126,7 @@ Strings are localized (`en` + `pt-BR`) following the agent's Flex language; add 
 
 All require `Authorization: Bearer <agent Flex token>`.
 
-**`GET /get-memory?identifiers=<JSON>[&query=…][&profileId=…]`** — panel load + semantic memory search. `query` runs Recall semantically (top 5 obs / 3 summaries) and skips traits; `profileId` skips the identifier Lookup.
+**`GET /get-memory?identifiers=<JSON>[&query=…][&profileId=…][&observationsLimit=][&summariesLimit=][&communicationsLimit=]`** — panel load + semantic memory search. `query` runs Recall semantically (top 5 obs / 3 summaries) and skips traits; `profileId` skips the identifier Lookup. The limit params (panel view, clamped to 20) drive **"Load more"**; `communicationsLimit` opts into recalled messages (D4). Panel loads are **cached client-side** for 60s (Refresh bypasses).
 ```ts
 interface MemoryResponse {
   identifier: string;                  // candidate value that matched
@@ -137,6 +138,7 @@ interface MemoryResponse {
   traits: Record<string, Record<string, unknown>>;                 // keyed by Trait Group
   observations: { id; content; createdAt; occurredAt?; conversationIds?; source?; score? }[];
   summaries:    { id; content; createdAt; occurredAt?; conversationIds?; source?; score? }[];
+  communications?: { id; content; author?; channel?; createdAt?; occurredAt? }[]; // opt-in (D4); [] unless requested
   partial?: boolean;                   // one upstream call failed
 }
 ```
@@ -177,10 +179,10 @@ twilio flex:plugins:release --plugin plugin-conversation-memory@<version> --name
 Set the serverless env vars on the deployed service; restrict `ALLOWED_ORIGINS` to your Flex domain.
 
 ## Tests
-122 total, all green.
+133 total, all green.
 ```bash
-(cd flex-plugin && npm test)   # 65 — identifiers, MemoryPanel, SearchTab, TraitsTab, captureTurn, config, i18n, runtimeConfig (jsdom + RTL)
-(cd serverless && npm test)    # 57 — get-memory, search-knowledge, summarize, capture-turn, health, CORS, role gating, timeouts (node; fetch + token-validator mocked)
+(cd flex-plugin && npm test)   # 74 — identifiers, MemoryPanel, tabs, SearchTab, captureTurn, config, i18n, runtimeConfig, cache (jsdom + RTL)
+(cd serverless && npm test)    # 59 — get-memory, search-knowledge, summarize, capture-turn, health, CORS, role gating, timeouts, limits (node; fetch + token-validator mocked)
 ```
 Serverless tests live in `serverless/test/` (not `functions/`) so `twilio-run` never deploys them.
 

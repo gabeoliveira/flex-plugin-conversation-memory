@@ -7,17 +7,20 @@ import { Paragraph } from '@twilio-paste/core/paragraph';
 import { Stack } from '@twilio-paste/core/stack';
 import { Badge } from '@twilio-paste/core/badge';
 
-import { EmptyState } from './states';
+import { EmptyState, LoadMoreButton } from './states';
 import { getStrings } from '../../i18n';
 import { formatTimestamp, formatConversationIds } from '../../utils/format';
 import type { MemoryObservation } from '../../api/fetchMemory';
 
 interface Props {
   observations: MemoryObservation[];
+  /** Present when more can be loaded (C2). */
+  onLoadMore?: () => void;
+  loadingMore?: boolean;
 }
 
 /** Observations as a list of cards, newest first, with source + timestamp. */
-export function ObservationsTab({ observations }: Props) {
+export function ObservationsTab({ observations, onLoadMore, loadingMore }: Props) {
   if (observations.length === 0) {
     return <EmptyState message={getStrings().noObservations} />;
   }
@@ -64,6 +67,7 @@ export function ObservationsTab({ observations }: Props) {
           );
         })}
       </Stack>
+      {onLoadMore ? <LoadMoreButton onClick={onLoadMore} loading={loadingMore} /> : null}
     </Box>
   );
 }

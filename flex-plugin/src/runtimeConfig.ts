@@ -36,6 +36,8 @@ export interface RuntimeConfig {
   locale?: string;
   enableSummarize?: boolean;
   enableCapture?: boolean;
+  /** Show the opt-in Communications tab (default off). */
+  enableCommunications?: boolean;
   traitGroups?: TraitGroupConfig;
 }
 
