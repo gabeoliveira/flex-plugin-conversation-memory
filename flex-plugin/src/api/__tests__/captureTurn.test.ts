@@ -5,6 +5,10 @@
  */
 export {}; // make this file a module under isolatedModules
 
+// captureTurn → config → runtimeConfig → @twilio/flex-ui; stub runtimeConfig so
+// captureEnabled falls through to the env flag (and no Flex bundle loads).
+jest.mock('../../runtimeConfig', () => ({ getRuntimeConfig: jest.fn(() => ({})) }));
+
 const OLD_ENV = { ...process.env };
 const PARAMS = { kind: 'search' as const, query: 'q', answer: 'a', token: 't' };
 

@@ -1,14 +1,15 @@
 /**
- * Build-time feature flags. `FLEX_APP_*` env vars are inlined at build, so these
- * are decided when the plugin is built for a given customer — no runtime config.
+ * Feature flags, layered: **Flex `ui_attributes` (runtime) overrides build-time
+ * `FLEX_APP_*` env**. Runtime config lets a customer flip these without a rebuild
+ * (Workstream D3); the env var is the fallback when the ui_attribute is absent.
  *
- * Both default ON. Set the env var to `false` / `0` / `off` / `no` to disable.
- *
+ * Env vars (inlined at build), both default ON — set to `false`/`0`/`off`/`no`:
  *   FLEX_APP_ENABLE_SUMMARIZE=false   # hide the OpenAI "Summarize" button
- *                                     # (the panel becomes memory + knowledge +
- *                                     #  search only — no OpenAI dependency)
+ *                                     # (memory + knowledge + search only — no OpenAI)
  *   FLEX_APP_ENABLE_CAPTURE=false     # don't fire the Phase 6 productivity capture
+ * Runtime equivalents: ui_attributes.conversation_memory.enableSummarize / enableCapture.
  */
+import { getRuntimeConfig } from './runtimeConfig';
 
 /** True unless the env var is explicitly a falsy word. Read at call time so tests
  *  (and any late env setup) see the current value. */
@@ -20,10 +21,12 @@ export function flag(name: string, def = true): boolean {
 
 /** Whether the grounded OpenAI "Summarize" action is available. */
 export function summarizeEnabled(): boolean {
-  return flag('FLEX_APP_ENABLE_SUMMARIZE');
+  const rc = getRuntimeConfig().enableSummarize;
+  return typeof rc === 'boolean' ? rc : flag('FLEX_APP_ENABLE_SUMMARIZE');
 }
 
 /** Whether agent↔assistant turns are captured for productivity analytics (Phase 6). */
 export function captureEnabled(): boolean {
-  return flag('FLEX_APP_ENABLE_CAPTURE');
+  const rc = getRuntimeConfig().enableCapture;
+  return typeof rc === 'boolean' ? rc : flag('FLEX_APP_ENABLE_CAPTURE');
 }

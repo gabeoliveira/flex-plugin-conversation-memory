@@ -7,10 +7,16 @@ jest.mock('@twilio/flex-ui', () => ({
     },
   },
 }));
+// Drive the runtime locale-override layer directly.
+jest.mock('../../runtimeConfig', () => ({ getRuntimeConfig: jest.fn(() => ({})) }));
 
 import { resolveLocale, getStrings } from '../index';
+import { getRuntimeConfig } from '../../runtimeConfig';
 import { en } from '../en';
 import { ptBR } from '../pt-BR';
+
+const mockRuntime = getRuntimeConfig as jest.MockedFunction<typeof getRuntimeConfig>;
+afterEach(() => mockRuntime.mockReturnValue({}));
 
 describe('resolveLocale', () => {
   it('exact tag (case-insensitive)', () => {
@@ -44,6 +50,12 @@ describe('getStrings', () => {
     expect(getStrings('pt-BR')).toBe(ptBR);
     expect(getStrings('pt-BR').refresh).toBe('Atualizar');
     expect(getStrings('pt-BR').tabSummaries).toBe('Resumos');
+  });
+
+  it('honors a locale from runtime config (ui_attributes)', () => {
+    mockRuntime.mockReturnValue({ locale: 'pt-BR' });
+    expect(getStrings()).toBe(ptBR);
+    expect(getStrings().panelTitle).toBe('Memória do Cliente');
   });
 
   it('every locale implements the full string set (no missing keys)', () => {

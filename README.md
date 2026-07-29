@@ -102,6 +102,25 @@ The **core** panel — Traits, Observations, Summaries, and Search (memory + kno
 - **Summarize (OpenAI).** The grounded "Summarize" action is the *only* OpenAI dependency. Leave `OPENAI_API_KEY` unset and everything else is unaffected — `/summarize` just refuses that one action. A build-time flag (`FLEX_APP_ENABLE_SUMMARIZE`) that hides the button entirely for OpenAI-averse customers is a small, isolated add — see [Roadmap](#roadmap).
 - **Agent-productivity capture (Phase 6).** Entirely fire-and-forget and best-effort: if `infra/agent-productivity/` isn't provisioned (or the `AGENT_*` serverless vars are unset), captures simply no-op and the agent experience is unchanged. No CO/CI infra, no OpenAI — pure observability, off by default until you provision it.
 
+### Runtime configuration (no rebuild)
+
+Locale, the two feature flags, and the trait-group display can all be set at **runtime** via Flex `ui_attributes` (Flex Configuration REST API) under a `conversation_memory` namespace — **runtime overrides the build-time `FLEX_APP_*` env**, so a customer reconfigures without rebuilding the plugin:
+```json
+{
+  "conversation_memory": {
+    "locale": "pt-BR",                              // else follows Flex's UI locale
+    "enableSummarize": false,                        // hide the OpenAI Summarize button
+    "enableCapture": true,
+    "traitGroups": {
+      "order":  ["Contact", "DasaClient"],           // display order (unlisted follow)
+      "hidden": ["Internal"],                        // groups to hide
+      "labels": { "DasaClient": "Cliente Dasa" }     // display labels
+    }
+  }
+}
+```
+Strings are localized (`en` + `pt-BR`) following the agent's Flex language; add a locale with one file under [`flex-plugin/src/i18n/`](flex-plugin/src/i18n/) (the `Strings` type enforces completeness).
+
 ## Endpoints & data contracts
 
 All require `Authorization: Bearer <agent Flex token>`.
@@ -158,9 +177,9 @@ twilio flex:plugins:release --plugin plugin-conversation-memory@<version> --name
 Set the serverless env vars on the deployed service; restrict `ALLOWED_ORIGINS` to your Flex domain.
 
 ## Tests
-109 total, all green.
+122 total, all green.
 ```bash
-(cd flex-plugin && npm test)   # 52 — identifiers, MemoryPanel, SearchTab, captureTurn, flags, error UX, i18n (jsdom + RTL)
+(cd flex-plugin && npm test)   # 65 — identifiers, MemoryPanel, SearchTab, TraitsTab, captureTurn, config, i18n, runtimeConfig (jsdom + RTL)
 (cd serverless && npm test)    # 57 — get-memory, search-knowledge, summarize, capture-turn, health, CORS, role gating, timeouts (node; fetch + token-validator mocked)
 ```
 Serverless tests live in `serverless/test/` (not `functions/`) so `twilio-run` never deploys them.

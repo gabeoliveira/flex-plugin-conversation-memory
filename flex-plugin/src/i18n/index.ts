@@ -15,6 +15,7 @@ import * as Flex from '@twilio/flex-ui';
 import type { Strings } from './types';
 import { en } from './en';
 import { ptBR } from './pt-BR';
+import { getRuntimeConfig } from '../runtimeConfig';
 
 export type { Strings } from './types';
 
@@ -49,7 +50,16 @@ function currentLocaleTag(): string | undefined {
   }
 }
 
-/** The active string map. Pass `override` to force a locale (D3 runtime config). */
+/**
+ * A forced-locale override, most-authoritative first: an explicit argument, then
+ * Flex `ui_attributes` (runtime, D3), then `FLEX_APP_LOCALE` (build-time). When
+ * none is set, `getStrings` follows Flex's own UI locale.
+ */
+function localeOverride(explicit?: string): string | undefined {
+  return explicit || getRuntimeConfig().locale || process.env.FLEX_APP_LOCALE || undefined;
+}
+
+/** The active string map. Honors the locale override chain, else Flex's UI locale. */
 export function getStrings(override?: string): Strings {
-  return MAPS[resolveLocale(currentLocaleTag(), override)] ?? en;
+  return MAPS[resolveLocale(currentLocaleTag(), localeOverride(override))] ?? en;
 }

@@ -9,6 +9,7 @@ import { Text } from '@twilio-paste/core/text';
 
 import { EmptyState } from './states';
 import { getStrings } from '../../i18n';
+import { getRuntimeConfig } from '../../runtimeConfig';
 
 interface Props {
   traits: Record<string, Record<string, unknown>>;
@@ -42,11 +43,30 @@ function TraitRow({ label, value }: { label: string; value: unknown }) {
   );
 }
 
-/** Traits grouped by Trait Group, each group a labelled card of key/value pairs. */
+/** Traits grouped by Trait Group, each group a labelled card of key/value pairs.
+ *  Group order / visibility / labels are configurable via ui_attributes (D2). */
 export function TraitsTab({ traits }: Props) {
-  const groups = Object.entries(traits).filter(
+  const cfg = getRuntimeConfig().traitGroups || {};
+
+  let groups = Object.entries(traits).filter(
     ([, fields]) => fields && typeof fields === 'object' && Object.keys(fields).length > 0,
   );
+
+  // Hide configured groups.
+  if (cfg.hidden && cfg.hidden.length > 0) {
+    groups = groups.filter(([name]) => !cfg.hidden!.includes(name));
+  }
+  // Apply the configured order; unlisted groups keep their natural order, after.
+  if (cfg.order && cfg.order.length > 0) {
+    const rank = (name: string) => {
+      const i = cfg.order!.indexOf(name);
+      return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+    };
+    groups = groups
+      .map((entry, i) => ({ entry, i }))
+      .sort((a, b) => rank(a.entry[0]) - rank(b.entry[0]) || a.i - b.i)
+      .map((x) => x.entry);
+  }
 
   if (groups.length === 0) {
     return <EmptyState message={getStrings().noTraits} />;
@@ -58,7 +78,7 @@ export function TraitsTab({ traits }: Props) {
         {groups.map(([groupName, fields]) => (
           <Card key={groupName} padding="space60">
             <Heading as="h4" variant="heading40" marginBottom="space0">
-              {groupName}
+              {(cfg.labels && cfg.labels[groupName]) || groupName}
             </Heading>
             <Separator orientation="horizontal" verticalSpacing="space40" />
             <Stack orientation="vertical" spacing="space40">

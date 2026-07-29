@@ -267,10 +267,13 @@ self-deploy). Connecting theme: **safe by default, configurable without a rebuil
   behind a typed `Strings` shape; `getStrings()` follows Flex's `Manager…localization.localeTag`
   (primary-subtag fallback, `en` default) and accepts an **override** (the D3 runtime-config hook).
   `friendlyError` is localized too. Adding a locale = one file (compiler enforces completeness).
-- **D2** Configurable **trait-group display** (order / labels / visibility) via config.
-- **D3 Runtime config** — promote the build-time flags + `CRM_MODE` + locale + trait config
-  to read from Flex `ui_attributes` so customers configure **without a rebuild**; build-time
-  stays the fallback.
+- **D2** ✅ Configurable **trait-group display** — `TraitsTab` honors `traitGroups.{order,hidden,
+  labels}` from runtime config (unlisted groups keep natural order; empty-after-hide → empty state).
+- **D3** ✅ **Runtime config** (`@0.1.0`) — `src/runtimeConfig.ts` reads a `conversation_memory`
+  namespace from Flex `ui_attributes` (defensive across `configuration` + `serviceConfiguration
+  .ui_attributes`, memoized). Feature flags (`config.ts`) and locale (`i18n`) now layer
+  **runtime over build-time env**, so customers reconfigure locale / flags / trait display
+  **without a rebuild**. (`CRM_MODE` left build-time — it's a structural placement choice.)
 - **D4** *(opt-in)* `communications` tab — recent cross-channel messages behind a flag, PII-aware.
 
 ### Workstream E — Forward-compat / ops
