@@ -1,11 +1,11 @@
 # Conversation Memory — Flex Plugin
 
-A reusable Twilio Flex plugin that surfaces **Twilio Memora** (customer memory) and **Enterprise Knowledge** to agents inside the **CRM container**. For the active task's customer it shows four tabs:
+A reusable Twilio Flex plugin that surfaces **Twilio Conversation Memory** and **Enterprise Knowledge** to agents inside the **CRM container**. For the active task's customer it shows four tabs:
 
 1. **Traits** — grouped by Trait Group
 2. **Observations** — newest first, with `source` + timestamp
 3. **Summaries** — conversation summaries, newest first, with `source` + timestamp
-4. **Search** — one box that semantically searches **this customer's memory** (Memora Recall) *and* your **org knowledge base** (Enterprise Knowledge) in parallel, in two labeled sections. Each result shows its `source` and a `% match` (relevance score). An **optional "Summarize"** action then produces a grounded, cited OpenAI answer over exactly those results.
+4. **Search** — one box that semantically searches **this customer's memory** (Conversation Memory Recall) *and* your **org knowledge base** (Enterprise Knowledge) in parallel, in two labeled sections. Each result shows its `source` and a `% match` (relevance score). An **optional "Summarize"** action then produces a grounded, cited OpenAI answer over exactly those results.
 
 > The four tabs and search work with **no OpenAI dependency**. Summarize (OpenAI) and the Phase 6 analytics capture are each independently optional — see [What's required vs. optional](#whats-required-vs-optional).
 
@@ -14,7 +14,7 @@ Data is fetched **live** through Twilio Serverless proxies on every task open �
 ```
 solutions/flex-plugin-conversation-memory/
 ├── flex-plugin/    # the Flex UI plugin (Twilio Paste, React 17)
-├── serverless/     # Twilio Function proxies (Memora + Knowledge + OpenAI + capture; hold the credentials)
+├── serverless/     # Twilio Function proxies (Conversation Memory + Knowledge + OpenAI + capture; hold the credentials)
 └── infra/          # provisioning scripts (agent-productivity: store/operator/intel/CO)
 ```
 
@@ -47,11 +47,11 @@ agent query ─▶ in parallel:
 
 **Live fetch, not a task-attribute snapshot.** Freshness (CI writes new observations mid/post-conversation), task-attribute size limits, and PII (keeps memory out of broadly-readable task attributes). Credentials can't live in the browser anyway, so a proxy is required regardless.
 
-**Identifiers decided client-side.** The plugin knows the task's channel, so it builds the ordered `{idType, value}` candidate list ([`utils/identifiers.ts`](flex-plugin/src/utils/identifiers.ts)); the proxy stays generic and tries each against Memora's `Lookup`, first match wins. Adding a new id type (email, custom id) is a client-only change. **WhatsApp transition:** for a WhatsApp task it tries the `whatsapp` idType (raw `whatsapp:` address) first, then a `phone` fallback that can come from a *different* attribute — so resolution works even when the address is a Meta username with no embedded phone.
+**Identifiers decided client-side.** The plugin knows the task's channel, so it builds the ordered `{idType, value}` candidate list ([`utils/identifiers.ts`](flex-plugin/src/utils/identifiers.ts)); the proxy stays generic and tries each against Conversation Memory's `Lookup`, first match wins. Adding a new id type (email, custom id) is a client-only change. **WhatsApp transition:** for a WhatsApp task it tries the `whatsapp` idType (raw `whatsapp:` address) first, then a `phone` fallback that can come from a *different* attribute — so resolution works even when the address is a Meta username with no embedded phone.
 
 **Grounded summarize (no TAC / no Langflow).** Synthesis is one LLM call: the plugin passes the results it's *already showing* (no re-retrieval), so citations `[M#]`/`[K#]` map to the numbered cards; the prompt forbids invention, requires citations, and short-circuits with no LLM call when there are no sources. (TAC is a channel bridge — there's no channel here — so it'd be a mismatch; Langflow only earns its keep if this becomes a conversational/SE-editable assistant. See the Phase 6 roadmap.)
 
-> **Gotcha baked in:** Memora **Recall honors only camelCase limit params** (`observationsLimit`/`summariesLimit`). snake_case is silently ignored and Recall returns its large default (~25). The TAC SDK's `MemoryClient` has this bug; this proxy uses camelCase.
+> **Gotcha baked in:** Conversation Memory **Recall honors only camelCase limit params** (`observationsLimit`/`summariesLimit`). snake_case is silently ignored and Recall returns its large default (~25). The TAC SDK's `MemoryClient` has this bug; this proxy uses camelCase.
 
 ## Auth
 
@@ -77,7 +77,7 @@ cp .env.example .env   # fill the vars below
 npm start              # twilio-run on http://localhost:3001
 ```
 Serverless env vars:
-- `TWILIO_API_KEY` / `TWILIO_API_SECRET` — API Key/Secret pair (not the account auth token) for Memora + Knowledge REST calls.
+- `TWILIO_API_KEY` / `TWILIO_API_SECRET` — API Key/Secret pair (not the account auth token) for Conversation Memory + Knowledge REST calls.
 - `MEMORY_STORE_ID` — the value used in the API path (`mem_store_*` / `mem_service_*`), **not** an `IS…`/`GA…` SID.
 - `TWILIO_MEMORY_PROFILE_TRAIT_GROUPS` — comma-separated trait groups (blank = all).
 - `ACCOUNT_SID` / `AUTH_TOKEN` — validate the agent's Flex token (auto-injected when deployed; set locally for `twilio-run`).
@@ -97,7 +97,7 @@ npm start               # Flex local shell on http://localhost:3000
 
 ### What's required vs. optional
 
-The **core** panel — Traits, Observations, Summaries, and Search (memory + knowledge) — needs only the Memora + Knowledge vars above. Two pieces are **independently optional**, for customers who want "just search and traits":
+The **core** panel — Traits, Observations, Summaries, and Search (memory + knowledge) — needs only the Conversation Memory + Knowledge vars above. Two pieces are **independently optional**, for customers who want "just search and traits":
 
 - **Summarize (OpenAI).** The grounded "Summarize" action is the *only* OpenAI dependency. Leave `OPENAI_API_KEY` unset and everything else is unaffected — `/summarize` just refuses that one action. A build-time flag (`FLEX_APP_ENABLE_SUMMARIZE`) that hides the button entirely for OpenAI-averse customers is a small, isolated add — see [Roadmap](#roadmap).
 - **Agent-productivity capture (Phase 6).** Entirely fire-and-forget and best-effort: if `infra/agent-productivity/` isn't provisioned (or the `AGENT_*` serverless vars are unset), captures simply no-op and the agent experience is unchanged. No CO/CI infra, no OpenAI — pure observability, off by default until you provision it.

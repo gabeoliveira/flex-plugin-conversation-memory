@@ -10,7 +10,7 @@
  * host is knowledge.twilio.com (distinct from memory.twilio.com).
  *
  * Auth: the agent's Flex token is validated server-side before any call. The
- * Memora/Knowledge API key/secret stay server-side.
+ * Conversation Memory/Knowledge API key/secret stay server-side.
  */
 
 exports.handler = async function (context, event, callback) {

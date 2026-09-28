@@ -2,7 +2,7 @@
  * GET /get-memory?identifiers=<url-encoded JSON array>[&query=…][&profileId=…]
  *   Authorization: Bearer <agent Flex token>   (required)
  *
- * Returns the Twilio Memora profile (traits), observations, and summaries for
+ * Returns the Twilio Conversation Memory profile (traits), observations, and summaries for
  * a customer — used by the Conversation Memory Flex plugin's panel and search.
  *
  * Modes:
@@ -15,10 +15,10 @@
  *
  * The CLIENT decides which identifiers to try (it knows the task's channel).
  * This proxy stays generic: it tries each `{ idType, value }` candidate against
- * Memora's Lookup in order, first match wins, then getProfile + Recall.
+ * Conversation Memory's Lookup in order, first match wins, then getProfile + Recall.
  *
  * Auth: the agent's Flex token is validated server-side (twilio-flex-token-
- * validator) before any Memora call — the function is not open. The Memora API
+ * validator) before any Conversation Memory call — the function is not open. The Conversation Memory API
  * key/secret stay server-side so they never ship in the Flex bundle.
  */
 
@@ -153,13 +153,13 @@ exports.handler = async function (context, event, callback) {
     // Search mode: Recall is the whole result — its failure is fatal.
     if (query && recallFailed) {
       response.setStatusCode(upstreamStatus(recall.__error));
-      response.setBody({ error: 'memora recall failed', detail: errString(recall.__error) });
+      response.setBody({ error: 'memory recall failed', detail: errString(recall.__error) });
       return callback(null, response);
     }
     // Panel mode: fatal only if BOTH traits and recall failed.
     if (!query && recallFailed && profileError) {
       response.setStatusCode(upstreamStatus(recall.__error || profileError));
-      response.setBody({ error: 'memora fetch failed', detail: errString(profileError) });
+      response.setBody({ error: 'memory fetch failed', detail: errString(profileError) });
       return callback(null, response);
     }
 
@@ -183,7 +183,7 @@ exports.handler = async function (context, event, callback) {
     return callback(null, response);
   } catch (err) {
     response.setStatusCode(upstreamStatus(err));
-    response.setBody({ error: 'memora fetch failed', detail: errString(err) });
+    response.setBody({ error: 'memory fetch failed', detail: errString(err) });
     return callback(null, response);
   }
 };
@@ -264,7 +264,7 @@ async function lookupProfile(storeBase, authHeader, idType, value) {
   return { normalizedValue: data.normalizedValue, profiles: data.profiles || [] };
 }
 
-// Upstream request timeout (Workstream B1): a hung Memora call returns a clean
+// Upstream request timeout (Workstream B1): a hung Conversation Memory call returns a clean
 // 504 instead of spinning the agent's panel indefinitely.
 const UPSTREAM_TIMEOUT_MS = 8000;
 

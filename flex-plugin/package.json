@@ -2,7 +2,7 @@
   "name": "plugin-conversation-memory",
   "version": "0.1.1",
   "private": true,
-  "description": "Flex plugin that surfaces Twilio Memora (customer memory) traits, observations, and summaries inside the agent's CRM container.",
+  "description": "Flex plugin that surfaces Twilio Conversation Memory traits, observations, and summaries inside the agent's CRM container.",
   "scripts": {
     "start": "NODE_OPTIONS=--max-old-space-size=8192 twilio flex:plugins:start",
     "build": "NODE_OPTIONS=--max-old-space-size=8192 twilio flex:plugins:build",

@@ -2,7 +2,7 @@
  * Short-TTL client-side cache for panel memory loads (Workstream C1).
  *
  * Agents rapid-switch between tasks; without a cache, every switch back to a
- * customer re-hits Memora. This memoizes the panel payload per
+ * customer re-hits Conversation Memory. This memoizes the panel payload per
  * identifier-candidate-list + limits for a short window. **Refresh bypasses it**
  * (the panel invalidates the key first), and it only caches the panel view
  * (no search queries — those are per-term and not reused).

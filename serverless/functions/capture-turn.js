@@ -299,7 +299,7 @@ function bearerToken(event) {
 }
 
 // Upstream request timeout (Workstream B1): capture-turn is fire-and-forget, but
-// a hung CO/Memora call shouldn't keep the function invocation alive indefinitely.
+// a hung CO/Conversation Memory call shouldn't keep the function invocation alive indefinitely.
 const UPSTREAM_TIMEOUT_MS = 8000;
 
 async function fetchWithTimeout(url, options = {}, ms = UPSTREAM_TIMEOUT_MS) {

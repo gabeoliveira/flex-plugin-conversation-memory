@@ -1,10 +1,10 @@
 /**
- * Fetches Memora (customer memory) data from the Twilio Function proxy.
+ * Fetches Conversation Memory data from the Twilio Function proxy.
  *
- * The proxy holds the Memora API key/secret — never expose them in the browser
+ * The proxy holds the Conversation Memory API key/secret — never expose them in the browser
  * bundle. The plugin decides which identifiers to try (channel-aware, built in
  * utils/identifiers) and sends them as an ordered list; the Function tries each
- * against Memora's Lookup, then does getProfile + Recall on the first match and
+ * against Conversation Memory's Lookup, then does getProfile + Recall on the first match and
  * returns the combined payload below.
  */
 
@@ -52,7 +52,7 @@ export interface MemoryResponse {
   identifier: string;
   /** Which idType matched (e.g. 'whatsapp', 'phone', 'email'), or null if none. */
   matchedBy: string | null;
-  /** null when no Memora profile matched the identifier. */
+  /** null when no Conversation Memory profile matched the identifier. */
   profileId: string | null;
   profileCreatedAt: string | null;
   /** Keyed by Trait Group name; each group is a key→value record. */

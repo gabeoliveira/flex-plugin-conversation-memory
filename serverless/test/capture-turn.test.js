@@ -88,7 +88,7 @@ function setupFetch({ convMode = 'create', insertFailFirstN = 0, agentProfileExi
   global.fetch = jest.fn(async (url, options = {}) => {
     const method = options.method || 'GET';
 
-    // Memora (agent profile enrichment)
+    // Conversation Memory (agent profile enrichment)
     if (method === 'POST' && /\/Profiles\/Lookup$/.test(url)) {
       lookupCalls.push(JSON.parse(options.body));
       return res(200, { profiles: agentProfileExists ? [{ id: 'mem_profile_agent' }] : [] });

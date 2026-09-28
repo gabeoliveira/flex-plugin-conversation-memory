@@ -21,7 +21,7 @@ interface Props {
 
 /**
  * Recent cross-channel messages (D4 — opt-in). Renders defensively since Recall's
- * communication fields vary. PII redaction is a Memora/CI concern; this tab only
+ * communication fields vary. PII redaction is a Conversation Memory/CI concern; this tab only
  * shows what Recall returns, and is off by default (enableCommunications).
  */
 export function CommunicationsTab({ communications, onLoadMore, loadingMore }: Props) {

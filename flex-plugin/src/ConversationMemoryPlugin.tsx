@@ -8,7 +8,7 @@ import { MemoryPanel } from './components/MemoryPanel/MemoryPanel';
 const PLUGIN_NAME = 'ConversationMemoryPlugin';
 
 /**
- * How the Memora panel occupies the CRM container. This is a per-integration
+ * How the Conversation Memory panel occupies the CRM container. This is a per-integration
  * architectural choice that's the same across every environment, so it lives
  * here as a typed constant rather than in `.env` (which is reserved for
  * environment-specific values like the functions URL and credentials).

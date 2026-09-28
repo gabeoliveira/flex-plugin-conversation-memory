@@ -66,7 +66,7 @@ Notes:
 ## Phase 3 — In-Flex verification
 
 1. Route a test task whose attributes carry `channelType` plus
-   `customerAddress`/`from` set to an identifier present in your Memora store
+   `customerAddress`/`from` set to an identifier present in your Conversation Memory store
    (test both an SMS phone task and a `whatsapp:`-prefixed WhatsApp task).
 2. Accept the task, open the CRM panel. Confirm:
    - Panel renders (above the CRM iframe in `add` mode).
@@ -80,10 +80,10 @@ Notes:
 
 ## Phase 4 — Deploy (✅ done)
 
-1. `cd serverless && npm run deploy`; note the `https://…twil.io` domain. → `conversation-memory-serverless-xxxx-dev.twil.io`.
+1. `cd serverless && npm run deploy`; note the `https://…twil.io` domain. → `https://<service-name>-<id>-dev.twil.io`.
 2. `flex-plugin/.env`: set `FLEX_APP_FUNCTIONS_BASE_URL` to that domain. ✅
 3. `cd flex-plugin && npm run deploy` (used `--bypass-validation` for the non-blocking `channelType` warning). → `plugin-conversation-memory@0.0.1` deployed.
-4. `twilio flex:plugins:release --plugin plugin-conversation-memory@0.0.1 …` → config `FJxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` enabled. ✅
+4. `twilio flex:plugins:release --plugin plugin-conversation-memory@0.0.1 …` → config `FJ…` enabled. ✅
 5. Set the serverless env vars on the deployed service (`TWILIO_API_KEY` / `TWILIO_API_SECRET` / `MEMORY_STORE_ID` / trait groups).
 6. Restrict `ALLOWED_ORIGINS` (see Phase 5).
 
@@ -183,7 +183,7 @@ assistant, run Conversation Intelligence on it, report via CIRL (black box).
   turns off Phase 6 capture. `summarize.js` also degrades to `200 {disabled:true}` when
   `OPENAI_API_KEY` is unset (see [`src/config.ts`](src/config.ts)). Shipped in `@0.0.4`.
 
-**Identity finding:** Memora's *default* idTypes are `chat, email, phone, pushUserID, whatsapp`, but
+**Identity finding:** Conversation Memory's *default* idTypes are `chat, email, phone, pushUserID, whatsapp`, but
 **custom idTypes are supported** via the store's **Identity Resolution Settings** (`PUT
 /IdentityResolutionSettings`; `normalization: 'trim'` keeps a raw `WK…` intact). The agent is keyed by
 a custom **`workerSid`** identifier: `create-agent-memory-store.ts` registers it and promotes an

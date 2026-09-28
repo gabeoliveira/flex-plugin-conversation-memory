@@ -140,3 +140,6 @@ flex-plugin/public/appConfig.js
 
 # Twilio Serverless local deploy state (embeds Account SID + service SIDs)
 .twiliodeployinfo
+
+# Flex plugin build output — inlines FLEX_APP_* env (deployed Functions domain) at build time; never commit
+flex-plugin/build/

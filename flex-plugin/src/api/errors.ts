@@ -3,7 +3,7 @@
  *
  * The Function proxies return different failure classes that call for different
  * agent guidance: a 401 means the Flex session lapsed (reload), a 5xx means the
- * upstream (Memora/Knowledge/OpenAI) is unavailable (retry). Carrying the status
+ * upstream (Conversation Memory/Knowledge/OpenAI) is unavailable (retry). Carrying the status
  * on the error lets the panel say the right thing instead of dumping a raw
  * "get-memory 502: ..." string at the agent.
  */

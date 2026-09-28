@@ -1,16 +1,16 @@
 /**
- * Builds the ordered list of Memora identifier candidates used to resolve a
+ * Builds the ordered list of Conversation Memory identifier candidates used to resolve a
  * customer profile, derived from the Flex task.
  *
  * The CHANNEL is known from the task, so we decide which identifier types to
  * try here (client-side) rather than having the serverless proxy sniff value
- * formats. The proxy just tries each candidate against Memora's Lookup
- * (`{ idType, value }`) in order — which mirrors Memora's flexible identifiers
+ * formats. The proxy just tries each candidate against Conversation Memory's Lookup
+ * (`{ idType, value }`) in order — which mirrors Conversation Memory's flexible identifiers
  * (phone, email, whatsapp, custom ids) and means adding a new id type is a
  * client-only change with no proxy redeploy.
  *
  * Ordering: the channel-native identifier first, then the "universal"
- * identifiers (phone, email) that Memora can also resolve by — so a WhatsApp
+ * identifiers (phone, email) that Conversation Memory can also resolve by — so a WhatsApp
  * task whose address is a Meta username still falls back to a phone taken from
  * a *different* attribute.
  */
@@ -102,7 +102,7 @@ export function buildIdentifierCandidates(
       break;
   }
 
-  // 2) Universal fallbacks Memora can also resolve by.
+  // 2) Universal fallbacks Conversation Memory can also resolve by.
   push('phone', phone);
   push('email', email);
 

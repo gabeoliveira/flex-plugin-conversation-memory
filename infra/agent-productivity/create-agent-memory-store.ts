@@ -3,7 +3,7 @@
  *
  *   npm run create:store
  *
- * Agents are keyed by a CUSTOM `workerSid` identifier. Memora's default idTypes
+ * Agents are keyed by a CUSTOM `workerSid` identifier. Conversation Memory's default idTypes
  * are [chat, email, phone, pushUserID, whatsapp], but custom ones are added via
  * the store's Identity Resolution Settings (normalization: 'trim' keeps the raw
  * WK… value intact). The `Agent` trait group promotes two traits to identifiers:
